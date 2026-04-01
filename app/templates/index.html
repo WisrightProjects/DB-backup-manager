@@ -17,6 +17,20 @@
 
         .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
 
+        /* Project Tabs */
+        .project-tabs { display: flex; gap: 8px; margin-bottom: 24px; flex-wrap: wrap; }
+        .project-tab { padding: 10px 20px; border: 1px solid #334155; border-radius: 8px; background: #1e293b; color: #94a3b8; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.15s; display: flex; align-items: center; gap: 8px; }
+        .project-tab:hover { border-color: #475569; color: #e2e8f0; }
+        .project-tab.active { background: #3b82f6; border-color: #3b82f6; color: white; }
+        .project-tab .tab-icon { font-size: 16px; }
+        .project-tab .tab-status { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+        .tab-status-ok { background: #6ee7b7; }
+        .tab-status-error { background: #fca5a5; }
+        .tab-status-unknown { background: #64748b; }
+        .project-type-badge { font-size: 10px; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .type-wordpress { background: #1e3a5f; color: #93c5fd; }
+        .type-postgres { background: #1e3b2f; color: #86efac; }
+
         .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
         .stat-card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 20px; }
         .stat-card .label { font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
@@ -65,16 +79,12 @@
         .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid transparent; border-top-color: currentColor; border-radius: 50%; animation: spin 0.6s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
 
-        .toast { position: fixed; bottom: 24px; right: 24px; padding: 12px 20px; border-radius: 8px; font-size: 14px; z-index: 200; animation: slideIn 0.3s ease; }
+        .toast { position: fixed; bottom: 24px; right: 24px; padding: 12px 20px; border-radius: 8px; font-size: 14px; z-index: 200; animation: slideIn 0.3s ease; max-width: 500px; }
         .toast-success { background: #064e3b; color: #6ee7b7; border: 1px solid #065f46; }
         .toast-error { background: #7f1d1d; color: #fca5a5; border: 1px solid #991b1b; }
         @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
-        .progress-bar { height: 3px; background: #334155; border-radius: 2px; overflow: hidden; margin-top: 8px; }
-        .progress-bar .fill { height: 100%; background: #3b82f6; transition: width 0.3s; border-radius: 2px; }
-
         .empty-state { text-align: center; padding: 48px 20px; color: #64748b; }
-        .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
 
         @media (max-width: 768px) {
             .container { padding: 16px; }
@@ -88,12 +98,17 @@
     <div class="header">
         <div>
             <h1>Backup Manager</h1>
-            <div class="subtitle">Drive EV — Restic Backups</div>
+            <div class="subtitle">Restic Backup Dashboard</div>
         </div>
-        <span id="statusBadge" class="status-badge status-ok">Checking...</span>
+        <span id="statusBadge" class="status-badge status-ok">Loading...</span>
     </div>
 
     <div class="container">
+        <!-- Project Tabs -->
+        <div class="project-tabs" id="projectTabs">
+            <div class="project-tab active" style="cursor: default; opacity: 0.5;">Loading projects...</div>
+        </div>
+
         <div class="stats-grid">
             <div class="stat-card">
                 <div class="label">Total Snapshots</div>
@@ -133,7 +148,7 @@
         <!-- Snapshots Table -->
         <div class="panel">
             <div class="panel-header">
-                <h2>Snapshots</h2>
+                <h2 id="snapshotsTitle">Snapshots</h2>
                 <span id="snapshotCount" style="font-size: 13px; color: #64748b;"></span>
             </div>
             <div class="panel-body">
@@ -157,7 +172,7 @@
         <!-- Logs Panel -->
         <div class="panel" id="logsPanel" style="display: none;">
             <div class="panel-header">
-                <h2>Backup Logs</h2>
+                <h2 id="logsTitle">Backup Logs</h2>
                 <button class="btn btn-secondary btn-sm" onclick="loadLogs()">Refresh Logs</button>
             </div>
             <div class="panel-body">
@@ -170,11 +185,7 @@
     <div class="modal-overlay" id="restoreModal">
         <div class="modal">
             <h3>Confirm Restore</h3>
-            <p>You are about to restore snapshot <strong id="restoreSnapshotId"></strong>. This will:<br><br>
-                - Overwrite the current database with the backup<br>
-                - Replace WordPress uploads with backed up files<br><br>
-                <strong style="color: #fca5a5;">This action cannot be undone.</strong> Make sure you have a current backup before proceeding.
-            </p>
+            <p id="restoreMessage"></p>
             <div class="modal-actions">
                 <button class="btn btn-secondary" onclick="closeRestoreModal()">Cancel</button>
                 <button class="btn btn-danger" id="confirmRestoreBtn" onclick="confirmRestore()">
@@ -187,6 +198,9 @@
     <script>
         let currentSnapshots = [];
         let restoreTargetId = null;
+        let activeProject = null;
+        let projects = [];
+        let projectStatuses = {};
 
         // --- API Helpers ---
         async function api(url, opts = {}) {
@@ -236,14 +250,81 @@
         }
 
         function shortenPath(path) {
+            if (path.includes('drive-ev-lead-db')) return 'PG Dump';
             if (path.includes('drive-ev-db')) return 'DB Dump';
             if (path.includes('wp-uploads')) return 'WP Uploads';
             return path.split('/').pop();
         }
 
+        function getTypeIcon(type) {
+            switch (type) {
+                case 'wordpress': return 'W';
+                case 'postgres': return 'P';
+                default: return 'D';
+            }
+        }
+
+        function getTypeBadge(type) {
+            const cls = `type-${type}`;
+            return `<span class="project-type-badge ${cls}">${type}</span>`;
+        }
+
+        // --- Load Projects ---
+        async function loadProjects() {
+            const data = await api('/api/projects');
+            if (!data) return;
+            projects = data.projects || [];
+
+            if (projects.length > 0 && !activeProject) {
+                activeProject = projects[0].id;
+            }
+
+            renderProjectTabs();
+            loadSnapshots();
+            // Load statuses for all projects
+            loadAllProjectStatuses();
+        }
+
+        async function loadAllProjectStatuses() {
+            for (const p of projects) {
+                const data = await api(`/api/projects/${p.id}/snapshots`);
+                if (data && data.snapshots && data.snapshots.length > 0) {
+                    const latest = data.snapshots[0];
+                    const hoursSinceLast = (new Date() - new Date(latest.time)) / (1000 * 60 * 60);
+                    projectStatuses[p.id] = hoursSinceLast > 36 ? 'error' : 'ok';
+                } else {
+                    projectStatuses[p.id] = 'unknown';
+                }
+            }
+            renderProjectTabs();
+        }
+
+        function renderProjectTabs() {
+            const container = document.getElementById('projectTabs');
+            container.innerHTML = projects.map(p => {
+                const isActive = p.id === activeProject;
+                const status = projectStatuses[p.id] || 'unknown';
+                return `
+                    <div class="project-tab ${isActive ? 'active' : ''}" onclick="switchProject('${p.id}')">
+                        <span class="tab-status tab-status-${status}"></span>
+                        ${p.name}
+                        ${getTypeBadge(p.type)}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function switchProject(projectId) {
+            activeProject = projectId;
+            renderProjectTabs();
+            loadSnapshots();
+            if (logsVisible) loadLogs();
+        }
+
         // --- Load Snapshots ---
         async function loadSnapshots() {
-            const data = await api('/api/snapshots');
+            if (!activeProject) return;
+            const data = await api(`/api/projects/${activeProject}/snapshots`);
             if (!data) return;
 
             if (data.error) {
@@ -252,6 +333,8 @@
             }
 
             currentSnapshots = data.snapshots || [];
+            const project = projects.find(p => p.id === activeProject);
+            document.getElementById('snapshotsTitle').textContent = `Snapshots - ${project ? project.name : ''}`;
             renderSnapshots();
             updateStats();
         }
@@ -260,7 +343,7 @@
             const tbody = document.getElementById('snapshotsTable');
 
             if (currentSnapshots.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No snapshots found</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No snapshots found for this project</td></tr>';
                 return;
             }
 
@@ -315,22 +398,34 @@
                     badge.className = 'status-badge status-ok';
                     badge.textContent = 'Healthy';
                 }
+            } else {
+                document.getElementById('lastBackupTime').textContent = '--';
+                document.getElementById('lastBackupAgo').textContent = '';
+                document.getElementById('oldestSnapshot').textContent = '--';
+                document.getElementById('backupStatus').textContent = 'No Data';
+                document.getElementById('backupStatus').style.color = '#64748b';
+                document.getElementById('backupStatusDetail').textContent = 'No snapshots found';
+                badge.className = 'status-badge status-error';
+                badge.textContent = 'No Backups';
             }
         }
 
         // --- Trigger Backup ---
         async function triggerBackup() {
+            if (!activeProject) return;
+            const project = projects.find(p => p.id === activeProject);
             const btn = document.getElementById('backupBtn');
             btn.disabled = true;
-            btn.innerHTML = '<span class="spinner"></span> Running Backup...';
+            btn.innerHTML = `<span class="spinner"></span> Backing up ${project ? project.name : ''}...`;
 
-            const data = await api('/api/backup', { method: 'POST' });
+            const data = await api(`/api/projects/${activeProject}/backup`, { method: 'POST' });
             btn.disabled = false;
             btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 2v8M4 6l4-4 4 4M2 14h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg> Create Backup Now`;
 
             if (data && data.success) {
                 showToast('Backup completed successfully!');
                 loadSnapshots();
+                loadAllProjectStatuses();
             } else {
                 showToast(data?.error || data?.output || 'Backup failed', 'error');
             }
@@ -338,17 +433,17 @@
 
         // --- Download ---
         async function downloadSnapshot(id) {
+            if (!activeProject) return;
             const btn = event.target.closest('button');
             const originalHtml = btn.innerHTML;
             btn.disabled = true;
             btn.innerHTML = '<span class="spinner"></span> Preparing...';
 
-            const data = await api(`/api/snapshots/${id}/prepare-download`, { method: 'POST' });
+            const data = await api(`/api/projects/${activeProject}/snapshots/${id}/prepare-download`, { method: 'POST' });
 
             if (data && data.ready) {
                 showToast(`Archive ready (${formatSize(data.size)}). Starting download...`);
-                window.location.href = `/api/snapshots/${id}/download`;
-                // Clean up after a delay
+                window.location.href = `/api/projects/${activeProject}/snapshots/${id}/download`;
                 setTimeout(() => api(`/api/downloads/${id}`, { method: 'DELETE' }), 60000);
             } else {
                 showToast(data?.error || 'Failed to prepare download', 'error');
@@ -361,7 +456,21 @@
         // --- Restore ---
         function openRestoreModal(id) {
             restoreTargetId = id;
-            document.getElementById('restoreSnapshotId').textContent = id;
+            const project = projects.find(p => p.id === activeProject);
+            let message = `You are about to restore snapshot <strong>${id}</strong> for <strong>${project ? project.name : ''}</strong>. This will:<br><br>`;
+
+            if (project && project.type === 'wordpress') {
+                message += `- Overwrite the current MariaDB database with the backup<br>`;
+                message += `- Replace WordPress uploads with backed up files<br>`;
+            } else if (project && project.type === 'postgres') {
+                message += `- Overwrite the current PostgreSQL database with the backup<br>`;
+            } else {
+                message += `- Overwrite the current database with the backup<br>`;
+            }
+
+            message += `<br><strong style="color: #fca5a5;">This action cannot be undone.</strong> Make sure you have a current backup before proceeding.`;
+
+            document.getElementById('restoreMessage').innerHTML = message;
             document.getElementById('restoreModal').classList.add('active');
         }
 
@@ -371,12 +480,12 @@
         }
 
         async function confirmRestore() {
-            if (!restoreTargetId) return;
+            if (!restoreTargetId || !activeProject) return;
             const btn = document.getElementById('confirmRestoreBtn');
             btn.disabled = true;
             btn.innerHTML = '<span class="spinner"></span> Restoring...';
 
-            const data = await api(`/api/snapshots/${restoreTargetId}/restore`, { method: 'POST' });
+            const data = await api(`/api/projects/${activeProject}/snapshots/${restoreTargetId}/restore`, { method: 'POST' });
             btn.disabled = false;
             btn.innerHTML = 'Restore Snapshot';
             closeRestoreModal();
@@ -397,7 +506,11 @@
         }
 
         async function loadLogs() {
-            const data = await api('/api/logs?lines=100');
+            if (!activeProject) return;
+            const project = projects.find(p => p.id === activeProject);
+            document.getElementById('logsTitle').textContent = `Logs - ${project ? project.name : ''}`;
+
+            const data = await api(`/api/projects/${activeProject}/logs?lines=100`);
             if (!data) return;
             const viewer = document.getElementById('logViewer');
             const lines = (data.logs || 'No logs available.').split('\n').map(line => {
@@ -416,7 +529,7 @@
         }
 
         // --- Init ---
-        loadSnapshots();
+        loadProjects();
     </script>
 </body>
 </html>

@@ -23,6 +23,10 @@ services:
       - DB_PASS=${DB_PASS}
       - DB_NAME=driveev_prod
       - WP_RESOURCE_ID=j4gcw00koks488wkscs448kc
+      - PG_CONTAINER=nckow088o4kss4ksw8k0ck80
+      - PG_USER=postgres
+      - PG_PASS=${PG_PASS}
+      - PG_DB=postgres
     volumes:
       - /opt/backups:/opt/backups:rw
       - /var/run/docker.sock:/var/run/docker.sock
