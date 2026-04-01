@@ -1,0 +1,24 @@
+services:
+  backup-manager:
+    build: .
+    ports:
+      - "8100:8000"
+    environment:
+      - AUTH_USERNAME=${AUTH_USERNAME:-admin}
+      - AUTH_PASSWORD=${AUTH_PASSWORD:-changeme}
+      - RESTIC_REPO=s3:https://eu2.contabostorage.com/wisright-backups
+      - RESTIC_PASSWORD_FILE=/opt/backups/.restic-pass
+      - BACKUP_SCRIPT=/opt/backups/backup-prod.sh
+      - BACKUP_LOG=/opt/backups/backup.log
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - DB_CONTAINER_NAME=ac0k8s488okksoo4cggo4wc4
+      - DB_USER=mariadb
+      - DB_PASS=${DB_PASS}
+      - DB_NAME=driveev_prod
+      - WP_RESOURCE_ID=j4gcw00koks488wkscs448kc
+    volumes:
+      - /opt/backups:/opt/backups:rw
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/lib/docker/volumes:/var/lib/docker/volumes:rw
+    restart: unless-stopped

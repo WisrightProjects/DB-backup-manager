@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Backup Manager</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; }
+
+        .header { background: #1e293b; border-bottom: 1px solid #334155; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
+        .header h1 { font-size: 20px; font-weight: 600; color: #f8fafc; }
+        .header .subtitle { font-size: 13px; color: #94a3b8; margin-top: 2px; }
+        .status-badge { padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 500; }
+        .status-ok { background: #064e3b; color: #6ee7b7; }
+        .status-error { background: #7f1d1d; color: #fca5a5; }
+
+        .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .stat-card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 20px; }
+        .stat-card .label { font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
+        .stat-card .value { font-size: 28px; font-weight: 700; color: #f8fafc; margin-top: 4px; }
+        .stat-card .detail { font-size: 12px; color: #64748b; margin-top: 4px; }
+
+        .actions-bar { display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+        .btn { padding: 10px 20px; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; transition: all 0.15s; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-primary { background: #3b82f6; color: white; }
+        .btn-primary:hover:not(:disabled) { background: #2563eb; }
+        .btn-danger { background: #dc2626; color: white; }
+        .btn-danger:hover:not(:disabled) { background: #b91c1c; }
+        .btn-secondary { background: #334155; color: #e2e8f0; }
+        .btn-secondary:hover:not(:disabled) { background: #475569; }
+        .btn-sm { padding: 6px 12px; font-size: 12px; }
+
+        .panel { background: #1e293b; border: 1px solid #334155; border-radius: 12px; margin-bottom: 24px; overflow: hidden; }
+        .panel-header { padding: 16px 20px; border-bottom: 1px solid #334155; display: flex; align-items: center; justify-content: space-between; }
+        .panel-header h2 { font-size: 16px; font-weight: 600; }
+        .panel-body { padding: 0; }
+
+        table { width: 100%; border-collapse: collapse; }
+        th { text-align: left; padding: 12px 20px; font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #334155; background: #1e293b; }
+        td { padding: 14px 20px; border-bottom: 1px solid #1e293b; font-size: 14px; }
+        tr:hover { background: #1e293b; }
+        tr:last-child td { border-bottom: none; }
+
+        .tag { display: inline-block; padding: 2px 8px; background: #1e3a5f; color: #93c5fd; border-radius: 4px; font-size: 11px; margin-right: 4px; }
+        .snapshot-id { font-family: 'SF Mono', 'Fira Code', monospace; color: #f59e0b; font-size: 13px; }
+        .snapshot-time { color: #e2e8f0; }
+        .snapshot-time .date { font-weight: 500; }
+        .snapshot-time .ago { color: #64748b; font-size: 12px; margin-left: 4px; }
+
+        .log-viewer { background: #0f172a; padding: 16px 20px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; line-height: 1.7; max-height: 400px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; color: #94a3b8; }
+        .log-line-error { color: #fca5a5; }
+        .log-line-success { color: #6ee7b7; }
+
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 100; align-items: center; justify-content: center; }
+        .modal-overlay.active { display: flex; }
+        .modal { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 24px; max-width: 500px; width: 90%; }
+        .modal h3 { margin-bottom: 12px; font-size: 18px; }
+        .modal p { color: #94a3b8; margin-bottom: 20px; font-size: 14px; line-height: 1.6; }
+        .modal-actions { display: flex; gap: 12px; justify-content: flex-end; }
+
+        .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid transparent; border-top-color: currentColor; border-radius: 50%; animation: spin 0.6s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .toast { position: fixed; bottom: 24px; right: 24px; padding: 12px 20px; border-radius: 8px; font-size: 14px; z-index: 200; animation: slideIn 0.3s ease; }
+        .toast-success { background: #064e3b; color: #6ee7b7; border: 1px solid #065f46; }
+        .toast-error { background: #7f1d1d; color: #fca5a5; border: 1px solid #991b1b; }
+        @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        .progress-bar { height: 3px; background: #334155; border-radius: 2px; overflow: hidden; margin-top: 8px; }
+        .progress-bar .fill { height: 100%; background: #3b82f6; transition: width 0.3s; border-radius: 2px; }
+
+        .empty-state { text-align: center; padding: 48px 20px; color: #64748b; }
+        .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+
+        @media (max-width: 768px) {
+            .container { padding: 16px; }
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+            td, th { padding: 10px 12px; }
+            .hide-mobile { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div>
+            <h1>Backup Manager</h1>
+            <div class="subtitle">Drive EV — Restic Backups</div>
+        </div>
+        <span id="statusBadge" class="status-badge status-ok">Checking...</span>
+    </div>
+
+    <div class="container">
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="label">Total Snapshots</div>
+                <div class="value" id="totalSnapshots">--</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Last Backup</div>
+                <div class="value" id="lastBackupTime">--</div>
+                <div class="detail" id="lastBackupAgo"></div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Oldest Snapshot</div>
+                <div class="value" id="oldestSnapshot">--</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Status</div>
+                <div class="value" id="backupStatus">--</div>
+                <div class="detail" id="backupStatusDetail"></div>
+            </div>
+        </div>
+
+        <div class="actions-bar">
+            <button class="btn btn-primary" onclick="triggerBackup()" id="backupBtn">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 2v8M4 6l4-4 4 4M2 14h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                Create Backup Now
+            </button>
+            <button class="btn btn-secondary" onclick="loadSnapshots()">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 8a6 6 0 0111.46-2.46M14 8A6 6 0 012.54 10.46" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                Refresh
+            </button>
+            <button class="btn btn-secondary" onclick="toggleLogs()">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 4h8M4 8h6M4 12h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                View Logs
+            </button>
+        </div>
+
+        <!-- Snapshots Table -->
+        <div class="panel">
+            <div class="panel-header">
+                <h2>Snapshots</h2>
+                <span id="snapshotCount" style="font-size: 13px; color: #64748b;"></span>
+            </div>
+            <div class="panel-body">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Date & Time</th>
+                            <th class="hide-mobile">Tags</th>
+                            <th class="hide-mobile">Paths</th>
+                            <th style="text-align: right;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="snapshotsTable">
+                        <tr><td colspan="5" class="empty-state">Loading snapshots...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Logs Panel -->
+        <div class="panel" id="logsPanel" style="display: none;">
+            <div class="panel-header">
+                <h2>Backup Logs</h2>
+                <button class="btn btn-secondary btn-sm" onclick="loadLogs()">Refresh Logs</button>
+            </div>
+            <div class="panel-body">
+                <div class="log-viewer" id="logViewer">Loading...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Restore Confirmation Modal -->
+    <div class="modal-overlay" id="restoreModal">
+        <div class="modal">
+            <h3>Confirm Restore</h3>
+            <p>You are about to restore snapshot <strong id="restoreSnapshotId"></strong>. This will:<br><br>
+                - Overwrite the current database with the backup<br>
+                - Replace WordPress uploads with backed up files<br><br>
+                <strong style="color: #fca5a5;">This action cannot be undone.</strong> Make sure you have a current backup before proceeding.
+            </p>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeRestoreModal()">Cancel</button>
+                <button class="btn btn-danger" id="confirmRestoreBtn" onclick="confirmRestore()">
+                    Restore Snapshot
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentSnapshots = [];
+        let restoreTargetId = null;
+
+        // --- API Helpers ---
+        async function api(url, opts = {}) {
+            const res = await fetch(url, opts);
+            if (res.status === 401) { location.reload(); return null; }
+            return res.json();
+        }
+
+        function showToast(message, type = 'success') {
+            const existing = document.querySelectorAll('.toast');
+            existing.forEach(t => t.remove());
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 5000);
+        }
+
+        function timeAgo(dateStr) {
+            const now = new Date();
+            const date = new Date(dateStr);
+            const seconds = Math.floor((now - date) / 1000);
+            if (seconds < 60) return 'just now';
+            const minutes = Math.floor(seconds / 60);
+            if (minutes < 60) return `${minutes}m ago`;
+            const hours = Math.floor(minutes / 60);
+            if (hours < 24) return `${hours}h ago`;
+            const days = Math.floor(hours / 24);
+            return `${days}d ago`;
+        }
+
+        function formatDate(dateStr) {
+            const d = new Date(dateStr);
+            return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        }
+
+        function formatTime(dateStr) {
+            const d = new Date(dateStr);
+            return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+        }
+
+        function formatSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+            return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+        }
+
+        function shortenPath(path) {
+            if (path.includes('drive-ev-db')) return 'DB Dump';
+            if (path.includes('wp-uploads')) return 'WP Uploads';
+            return path.split('/').pop();
+        }
+
+        // --- Load Snapshots ---
+        async function loadSnapshots() {
+            const data = await api('/api/snapshots');
+            if (!data) return;
+
+            if (data.error) {
+                showToast(data.error, 'error');
+                return;
+            }
+
+            currentSnapshots = data.snapshots || [];
+            renderSnapshots();
+            updateStats();
+        }
+
+        function renderSnapshots() {
+            const tbody = document.getElementById('snapshotsTable');
+
+            if (currentSnapshots.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No snapshots found</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = currentSnapshots.map(s => `
+                <tr>
+                    <td><span class="snapshot-id">${s.id}</span></td>
+                    <td>
+                        <span class="snapshot-time">
+                            <span class="date">${formatDate(s.time)}</span> ${formatTime(s.time)}
+                            <span class="ago">${timeAgo(s.time)}</span>
+                        </span>
+                    </td>
+                    <td class="hide-mobile">${s.tags.map(t => `<span class="tag">${t}</span>`).join('')}</td>
+                    <td class="hide-mobile" style="font-size: 12px; color: #64748b;">${s.paths.map(shortenPath).join(', ')}</td>
+                    <td style="text-align: right;">
+                        <button class="btn btn-secondary btn-sm" onclick="downloadSnapshot('${s.id}')" title="Download">
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 2v8M4 10l4 4 4-4M2 14h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            Download
+                        </button>
+                        <button class="btn btn-danger btn-sm" onclick="openRestoreModal('${s.id}')" title="Restore" style="margin-left: 4px;">
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M2 8a6 6 0 0111.46-2.46M14 8A6 6 0 012.54 10.46" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                            Restore
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function updateStats() {
+            const badge = document.getElementById('statusBadge');
+            document.getElementById('totalSnapshots').textContent = currentSnapshots.length;
+            document.getElementById('snapshotCount').textContent = `${currentSnapshots.length} snapshots`;
+
+            if (currentSnapshots.length > 0) {
+                const latest = currentSnapshots[0];
+                const oldest = currentSnapshots[currentSnapshots.length - 1];
+                document.getElementById('lastBackupTime').textContent = formatDate(latest.time);
+                document.getElementById('lastBackupAgo').textContent = timeAgo(latest.time);
+                document.getElementById('oldestSnapshot').textContent = formatDate(oldest.time);
+
+                const hoursSinceLast = (new Date() - new Date(latest.time)) / (1000 * 60 * 60);
+                if (hoursSinceLast > 36) {
+                    document.getElementById('backupStatus').textContent = 'Stale';
+                    document.getElementById('backupStatus').style.color = '#fca5a5';
+                    document.getElementById('backupStatusDetail').textContent = 'Last backup is older than 36 hours';
+                    badge.className = 'status-badge status-error';
+                    badge.textContent = 'Stale';
+                } else {
+                    document.getElementById('backupStatus').textContent = 'Healthy';
+                    document.getElementById('backupStatus').style.color = '#6ee7b7';
+                    document.getElementById('backupStatusDetail').textContent = 'Backups are running on schedule';
+                    badge.className = 'status-badge status-ok';
+                    badge.textContent = 'Healthy';
+                }
+            }
+        }
+
+        // --- Trigger Backup ---
+        async function triggerBackup() {
+            const btn = document.getElementById('backupBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> Running Backup...';
+
+            const data = await api('/api/backup', { method: 'POST' });
+            btn.disabled = false;
+            btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 2v8M4 6l4-4 4 4M2 14h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg> Create Backup Now`;
+
+            if (data && data.success) {
+                showToast('Backup completed successfully!');
+                loadSnapshots();
+            } else {
+                showToast(data?.error || data?.output || 'Backup failed', 'error');
+            }
+        }
+
+        // --- Download ---
+        async function downloadSnapshot(id) {
+            const btn = event.target.closest('button');
+            const originalHtml = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> Preparing...';
+
+            const data = await api(`/api/snapshots/${id}/prepare-download`, { method: 'POST' });
+
+            if (data && data.ready) {
+                showToast(`Archive ready (${formatSize(data.size)}). Starting download...`);
+                window.location.href = `/api/snapshots/${id}/download`;
+                // Clean up after a delay
+                setTimeout(() => api(`/api/downloads/${id}`, { method: 'DELETE' }), 60000);
+            } else {
+                showToast(data?.error || 'Failed to prepare download', 'error');
+            }
+
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
+        }
+
+        // --- Restore ---
+        function openRestoreModal(id) {
+            restoreTargetId = id;
+            document.getElementById('restoreSnapshotId').textContent = id;
+            document.getElementById('restoreModal').classList.add('active');
+        }
+
+        function closeRestoreModal() {
+            document.getElementById('restoreModal').classList.remove('active');
+            restoreTargetId = null;
+        }
+
+        async function confirmRestore() {
+            if (!restoreTargetId) return;
+            const btn = document.getElementById('confirmRestoreBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> Restoring...';
+
+            const data = await api(`/api/snapshots/${restoreTargetId}/restore`, { method: 'POST' });
+            btn.disabled = false;
+            btn.innerHTML = 'Restore Snapshot';
+            closeRestoreModal();
+
+            if (data && data.success) {
+                showToast('Restore completed: ' + data.output);
+            } else {
+                showToast(data?.error || 'Restore failed', 'error');
+            }
+        }
+
+        // --- Logs ---
+        let logsVisible = false;
+        function toggleLogs() {
+            logsVisible = !logsVisible;
+            document.getElementById('logsPanel').style.display = logsVisible ? 'block' : 'none';
+            if (logsVisible) loadLogs();
+        }
+
+        async function loadLogs() {
+            const data = await api('/api/logs?lines=100');
+            if (!data) return;
+            const viewer = document.getElementById('logViewer');
+            const lines = (data.logs || 'No logs available.').split('\n').map(line => {
+                if (line.includes('ERROR')) return `<span class="log-line-error">${escapeHtml(line)}</span>`;
+                if (line.includes('complete') || line.includes('saved')) return `<span class="log-line-success">${escapeHtml(line)}</span>`;
+                return escapeHtml(line);
+            });
+            viewer.innerHTML = lines.join('\n');
+            viewer.scrollTop = viewer.scrollHeight;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // --- Init ---
+        loadSnapshots();
+    </script>
+</body>
+</html>
