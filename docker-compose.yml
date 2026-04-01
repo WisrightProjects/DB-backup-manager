@@ -1,8 +1,14 @@
+networks:
+  coolify:
+    external: true
+
 services:
   backup-manager:
     build: .
     ports:
       - "8100:8000"
+    networks:
+      - coolify
     environment:
       - AUTH_USERNAME=${AUTH_USERNAME:-admin}
       - AUTH_PASSWORD=${AUTH_PASSWORD:-changeme}
