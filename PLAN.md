@@ -18,6 +18,89 @@ A self-hosted, open-source backup management dashboard that handles multiple pro
 
 ---
 
+## Phase 1.5: Notifications (Next Up)
+
+### Goal
+Catch silent failures within hours instead of weeks. On 2026-05-07 a stale Restic lock blocked `forget --prune` for 4 days — backups themselves kept succeeding so nothing surfaced as "failed", and snapshots accumulated to 91 before anyone noticed. Email alerts on failure + stale-backup detection prevent this class of issue.
+
+This phase deliberately runs *before* Phase 2 because Phase 2 is a meaningful rebuild — 2-4 hours of work here protects the live system during that rebuild.
+
+### Channel: Gmail SMTP via msmtp
+**Why:** free, direct, no third-party relay in the message flow, trusted deliverability (Gmail-to-Gmail rarely lands in spam), works without any app/UI on the recipient side.
+
+- **Sender:** dedicated Gmail / Google Workspace account (e.g. `wisright.backups@gmail.com`) with 2-Step Verification enabled and a 16-character app password generated from https://myaccount.google.com/apppasswords.
+- **Recipient:** `logesh@wisright.com` (initial — can be expanded to a distribution list later).
+
+### Triggers
+
+| Event | Condition | Subject prefix |
+|-------|-----------|----------------|
+| Backup OK | Script reaches "Backup complete." | `[OK]` |
+| Backup failure | DB dump or `restic backup` exits non-zero | `[FAIL]` |
+| Prune/forget failure | Backup succeeded but `restic forget --prune` failed (e.g. stale lock, network) | `[PRUNE-FAIL]` |
+| Stale backup | Newest snapshot for a tag is >25h old | `[STALE]` |
+
+Stale alerts are **debounced to one per tag per 12h** so a prolonged outage doesn't flood the inbox.
+
+### Pieces to build
+
+1. **`/opt/backups/.msmtprc`** (chmod 600, root-owned) — msmtp config:
+   ```
+   defaults
+   auth           on
+   tls            on
+   tls_starttls   on
+   tls_trust_file /etc/ssl/certs/ca-certificates.crt
+   logfile        /opt/backups/msmtp.log
+
+   account        gmail
+   host           smtp.gmail.com
+   port           587
+   from           <sender>@gmail.com
+   user           <sender>@gmail.com
+   password       <16-char app password>
+
+   account default : gmail
+   ```
+
+2. **`/opt/backups/notify.sh`** — generic wrapper. Usage: `notify.sh "<subject>" "<body>"`. Pipes a formatted RFC 5322 message to `msmtp`.
+
+3. **Patch `backup-prod.sh` and `backup-postgres.sh`** — add an `EXIT` trap at the top:
+   - Tee all stdout/stderr to a buffer file.
+   - Set `BACKUP_OK=1` after the restic backup step succeeds (used to distinguish `[FAIL]` from `[PRUNE-FAIL]` inside the trap).
+   - On exit: tail the last ~40 log lines, choose subject by `($? == 0)` vs `$BACKUP_OK` vs neither, call `notify.sh`.
+
+4. **`/opt/backups/check-stale.sh`** — hourly script:
+   - For each known tag, `restic snapshots --tag <t> --json` → newest `.time` → compare to `now`.
+   - If age > 25h AND last alert for this tag was > 12h ago (file stamp at `/opt/backups/.stale-state/<tag>`), call `notify.sh` with `[STALE]` subject, then update stamp.
+
+5. **Cron:** add hourly entry:
+   ```
+   0 * * * * /opt/backups/check-stale.sh >> /opt/backups/stale.log 2>&1
+   ```
+
+### Prerequisites (one-time, by user)
+- [ ] Create dedicated sender Gmail account
+- [ ] Enable 2-Step Verification on it
+- [ ] Generate app password (name: "VPS Backup Manager")
+- [ ] Hand off sender address + app password to whoever does the implementation
+
+### Test plan
+1. `notify.sh "[TEST]" "Hello from VPS"` → arrives at recipient within seconds. ✓ msmtp works.
+2. Manual `backup-prod.sh` → `[OK]` email with last 40 log lines. ✓ trap + log capture.
+3. Temporarily break DB creds, re-run → `[FAIL]` email with the error. ✓ failure path.
+4. Manually `restic lock` the repo, re-run → `[PRUNE-FAIL]` email. ✓ distinguishes prune-only failure.
+5. Backdate `/opt/backups/.stale-state/<tag>` to >25h ago and remove the most recent snapshot; run `check-stale.sh` → `[STALE]` email. ✓ debounce works.
+6. Run `check-stale.sh` a second time within 12h → silent. ✓ debouncing prevents spam.
+
+### Estimated effort
+2-4 hours including test pass.
+
+### Relationship to Phase 4
+Phase 4's "Notifications" entry describes a configurable per-project + global notification system inside the multi-project app. **Phase 1.5 is the v1 bash-driven version** that protects the current single-project setup *now*. When Phase 2's app is built, the v1 logic gets ported into the app's project model and made configurable via UI (channels, per-project overrides, etc.).
+
+---
+
 ## Phase 2: Multi-Project (Single VPS)
 
 ### Goal
@@ -324,6 +407,13 @@ Deploy on each remote VPS via Coolify as a simple Docker resource.
 ## Implementation Priority
 
 ```
+Phase 1.5 (Notifications — Next Up)
+├── msmtp + Gmail SMTP config
+├── /opt/backups/notify.sh helper
+├── EXIT traps in backup-prod.sh and backup-postgres.sh
+├── /opt/backups/check-stale.sh + hourly cron
+└── Test pass: [OK] / [FAIL] / [PRUNE-FAIL] / [STALE] / debounce
+
 Phase 2 (Multi-Project, Single VPS)
 ├── SQLite database + models
 ├── Project CRUD API + UI
@@ -352,4 +442,4 @@ Phase 4 (Nice-to-Haves)
 
 ---
 
-*Last updated: 2026-04-01*
+*Last updated: 2026-05-12*
