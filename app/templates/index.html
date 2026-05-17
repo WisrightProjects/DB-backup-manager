@@ -12,524 +12,922 @@
         .header h1 { font-size: 20px; font-weight: 600; color: #f8fafc; }
         .header .subtitle { font-size: 13px; color: #94a3b8; margin-top: 2px; }
         .status-badge { padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 500; }
-        .status-ok { background: #064e3b; color: #6ee7b7; }
+        .status-ok    { background: #064e3b; color: #6ee7b7; }
         .status-error { background: #7f1d1d; color: #fca5a5; }
 
         .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
 
-        /* Project Tabs */
-        .project-tabs { display: flex; gap: 8px; margin-bottom: 24px; flex-wrap: wrap; }
-        .project-tab { padding: 10px 20px; border: 1px solid #334155; border-radius: 8px; background: #1e293b; color: #94a3b8; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.15s; display: flex; align-items: center; gap: 8px; }
+        /* ── Tabs ── */
+        .tabs-row { display: flex; align-items: center; gap: 8px; margin-bottom: 24px; flex-wrap: wrap; }
+        .project-tabs { display: flex; gap: 8px; flex-wrap: wrap; flex: 1; }
+        .project-tab { padding: 10px 16px; border: 1px solid #334155; border-radius: 8px; background: #1e293b; color: #94a3b8; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.15s; display: flex; align-items: center; gap: 8px; }
         .project-tab:hover { border-color: #475569; color: #e2e8f0; }
         .project-tab.active { background: #3b82f6; border-color: #3b82f6; color: white; }
-        .project-tab .tab-icon { font-size: 16px; }
-        .project-tab .tab-status { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
-        .tab-status-ok { background: #6ee7b7; }
-        .tab-status-error { background: #fca5a5; }
+        .tab-status { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+        .tab-status-ok      { background: #6ee7b7; }
+        .tab-status-error   { background: #fca5a5; }
         .tab-status-unknown { background: #64748b; }
-        .project-type-badge { font-size: 10px; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
-        .type-wordpress { background: #1e3a5f; color: #93c5fd; }
-        .type-postgres { background: #1e3b2f; color: #86efac; }
+        .tab-actions { display: none; gap: 2px; margin-left: 2px; }
+        .project-tab:hover .tab-actions { display: flex; }
+        .tab-action-btn { background: none; border: none; cursor: pointer; color: #94a3b8; padding: 2px 5px; border-radius: 3px; font-size: 13px; line-height: 1; transition: all 0.1s; }
+        .tab-action-btn:hover { background: rgba(255,255,255,0.12); color: #e2e8f0; }
+        .project-tab.active .tab-action-btn { color: rgba(255,255,255,0.65); }
+        .project-tab.active .tab-action-btn:hover { background: rgba(255,255,255,0.2); color: white; }
+        .engine-badge { font-size: 10px; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+        .badge-pg     { background: #1e3b2f; color: #86efac; }
+        .badge-maria  { background: #2d1b3d; color: #c084fc; }
+        .badge-mysql  { background: #3d2000; color: #fb923c; }
+        .ssh-dot { font-size: 10px; color: #f59e0b; margin-left: -4px; }
 
+        /* ── Stats ── */
         .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
         .stat-card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 20px; }
-        .stat-card .label { font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
-        .stat-card .value { font-size: 28px; font-weight: 700; color: #f8fafc; margin-top: 4px; }
+        .stat-card .label  { font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
+        .stat-card .value  { font-size: 28px; font-weight: 700; color: #f8fafc; margin-top: 4px; }
         .stat-card .detail { font-size: 12px; color: #64748b; margin-top: 4px; }
 
+        /* ── Buttons ── */
         .actions-bar { display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
         .btn { padding: 10px 20px; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; transition: all 0.15s; }
         .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .btn-primary { background: #3b82f6; color: white; }
-        .btn-primary:hover:not(:disabled) { background: #2563eb; }
-        .btn-danger { background: #dc2626; color: white; }
-        .btn-danger:hover:not(:disabled) { background: #b91c1c; }
+        .btn-primary   { background: #3b82f6; color: white; }
+        .btn-primary:hover:not(:disabled)   { background: #2563eb; }
+        .btn-danger    { background: #dc2626; color: white; }
+        .btn-danger:hover:not(:disabled)    { background: #b91c1c; }
         .btn-secondary { background: #334155; color: #e2e8f0; }
         .btn-secondary:hover:not(:disabled) { background: #475569; }
         .btn-sm { padding: 6px 12px; font-size: 12px; }
 
+        /* ── Panels / Table ── */
         .panel { background: #1e293b; border: 1px solid #334155; border-radius: 12px; margin-bottom: 24px; overflow: hidden; }
         .panel-header { padding: 16px 20px; border-bottom: 1px solid #334155; display: flex; align-items: center; justify-content: space-between; }
         .panel-header h2 { font-size: 16px; font-weight: 600; }
-        .panel-body { padding: 0; }
-
         table { width: 100%; border-collapse: collapse; }
-        th { text-align: left; padding: 12px 20px; font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #334155; background: #1e293b; }
+        th { text-align: left; padding: 12px 20px; font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #334155; }
         td { padding: 14px 20px; border-bottom: 1px solid #1e293b; font-size: 14px; }
-        tr:hover { background: #1e293b; }
+        tr:hover td { background: #243044; }
         tr:last-child td { border-bottom: none; }
-
         .tag { display: inline-block; padding: 2px 8px; background: #1e3a5f; color: #93c5fd; border-radius: 4px; font-size: 11px; margin-right: 4px; }
         .snapshot-id { font-family: 'SF Mono', 'Fira Code', monospace; color: #f59e0b; font-size: 13px; }
-        .snapshot-time { color: #e2e8f0; }
-        .snapshot-time .date { font-weight: 500; }
-        .snapshot-time .ago { color: #64748b; font-size: 12px; margin-left: 4px; }
+        .snapshot-ago { color: #64748b; font-size: 12px; }
 
+        /* ── Logs ── */
         .log-viewer { background: #0f172a; padding: 16px 20px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; line-height: 1.7; max-height: 400px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; color: #94a3b8; }
-        .log-line-error { color: #fca5a5; }
-        .log-line-success { color: #6ee7b7; }
+        .log-error   { color: #fca5a5; }
+        .log-success { color: #6ee7b7; }
 
-        .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 100; align-items: center; justify-content: center; }
+        /* ── Modals ── */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.75); z-index: 100; align-items: center; justify-content: center; padding: 16px; }
         .modal-overlay.active { display: flex; }
-        .modal { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 24px; max-width: 500px; width: 90%; }
-        .modal h3 { margin-bottom: 12px; font-size: 18px; }
-        .modal p { color: #94a3b8; margin-bottom: 20px; font-size: 14px; line-height: 1.6; }
-        .modal-actions { display: flex; gap: 12px; justify-content: flex-end; }
+        .modal { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 24px; width: 100%; }
+        .modal-actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 24px; }
+        .modal h3 { margin-bottom: 16px; font-size: 18px; }
 
+        /* ── Project Form Modal ── */
+        .project-modal { max-width: 640px; max-height: 90vh; overflow-y: auto; }
+        .form-section { margin-bottom: 20px; }
+        .form-section-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: #64748b; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #283548; }
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .form-group { display: flex; flex-direction: column; gap: 6px; }
+        .form-group.full { grid-column: 1 / -1; }
+        .form-label { font-size: 12px; color: #94a3b8; }
+        .form-hint  { font-size: 11px; color: #475569; margin-top: 2px; }
+        .form-input, .form-select { background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 8px 12px; color: #e2e8f0; font-size: 14px; width: 100%; transition: border-color 0.15s; }
+        .form-input:focus, .form-select:focus { outline: none; border-color: #3b82f6; }
+        .form-input::placeholder { color: #3d5068; }
+        .radio-group { display: flex; gap: 20px; }
+        .radio-label { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; color: #e2e8f0; }
+        .radio-label input { accent-color: #3b82f6; width: 16px; height: 16px; cursor: pointer; }
+        .toggle-box { background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 12px 16px; }
+        .toggle-box label { cursor: pointer; font-size: 14px; color: #e2e8f0; display: flex; align-items: center; gap: 10px; }
+        .toggle-box input[type=checkbox] { accent-color: #3b82f6; width: 16px; height: 16px; cursor: pointer; }
+        .toggle-content { margin-top: 16px; }
+
+        /* ── Restore Modal ── */
+        .restore-modal { max-width: 480px; }
+        .restore-modal p { color: #94a3b8; margin-bottom: 8px; font-size: 14px; line-height: 1.6; }
+
+        /* ── Misc ── */
         .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid transparent; border-top-color: currentColor; border-radius: 50%; animation: spin 0.6s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
-
         .toast { position: fixed; bottom: 24px; right: 24px; padding: 12px 20px; border-radius: 8px; font-size: 14px; z-index: 200; animation: slideIn 0.3s ease; max-width: 500px; }
         .toast-success { background: #064e3b; color: #6ee7b7; border: 1px solid #065f46; }
-        .toast-error { background: #7f1d1d; color: #fca5a5; border: 1px solid #991b1b; }
+        .toast-error   { background: #7f1d1d; color: #fca5a5; border: 1px solid #991b1b; }
         @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-
         .empty-state { text-align: center; padding: 48px 20px; color: #64748b; }
 
-        @media (max-width: 768px) {
+        @media (max-width: 640px) {
             .container { padding: 16px; }
             .stats-grid { grid-template-columns: repeat(2, 1fr); }
             td, th { padding: 10px 12px; }
             .hide-mobile { display: none; }
+            .form-grid { grid-template-columns: 1fr; }
+            .form-group.full { grid-column: 1; }
         }
     </style>
 </head>
 <body>
-    <div class="header">
-        <div>
-            <h1>Backup Manager</h1>
-            <div class="subtitle">Restic Backup Dashboard</div>
-        </div>
-        <span id="statusBadge" class="status-badge status-ok">Loading...</span>
-    </div>
 
-    <div class="container">
-        <!-- Project Tabs -->
+<div class="header">
+    <div>
+        <h1>Backup Manager</h1>
+        <div class="subtitle">Restic Backup Dashboard</div>
+    </div>
+    <span id="statusBadge" class="status-badge status-ok">Loading...</span>
+</div>
+
+<div class="container">
+
+    <!-- Project Tabs -->
+    <div class="tabs-row">
         <div class="project-tabs" id="projectTabs">
-            <div class="project-tab active" style="cursor: default; opacity: 0.5;">Loading projects...</div>
+            <span style="color:#64748b;font-size:14px;">Loading...</span>
         </div>
+        <button class="btn btn-secondary btn-sm" onclick="openAddProjectModal()" style="white-space:nowrap;">
+            + Add Project
+        </button>
+    </div>
 
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="label">Total Snapshots</div>
-                <div class="value" id="totalSnapshots">--</div>
-            </div>
-            <div class="stat-card">
-                <div class="label">Last Backup</div>
-                <div class="value" id="lastBackupTime">--</div>
-                <div class="detail" id="lastBackupAgo"></div>
-            </div>
-            <div class="stat-card">
-                <div class="label">Oldest Snapshot</div>
-                <div class="value" id="oldestSnapshot">--</div>
-            </div>
-            <div class="stat-card">
-                <div class="label">Status</div>
-                <div class="value" id="backupStatus">--</div>
-                <div class="detail" id="backupStatusDetail"></div>
-            </div>
+    <!-- Stats -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="label">Total Snapshots</div>
+            <div class="value" id="totalSnapshots">--</div>
         </div>
-
-        <div class="actions-bar">
-            <button class="btn btn-primary" onclick="triggerBackup()" id="backupBtn">
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 2v8M4 6l4-4 4 4M2 14h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                Create Backup Now
-            </button>
-            <button class="btn btn-secondary" onclick="loadSnapshots()">
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 8a6 6 0 0111.46-2.46M14 8A6 6 0 012.54 10.46" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-                Refresh
-            </button>
-            <button class="btn btn-secondary" onclick="toggleLogs()">
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 4h8M4 8h6M4 12h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-                View Logs
-            </button>
+        <div class="stat-card">
+            <div class="label">Last Backup</div>
+            <div class="value" id="lastBackupTime">--</div>
+            <div class="detail" id="lastBackupAgo"></div>
         </div>
-
-        <!-- Snapshots Table -->
-        <div class="panel">
-            <div class="panel-header">
-                <h2 id="snapshotsTitle">Snapshots</h2>
-                <span id="snapshotCount" style="font-size: 13px; color: #64748b;"></span>
-            </div>
-            <div class="panel-body">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Date & Time</th>
-                            <th class="hide-mobile">Tags</th>
-                            <th class="hide-mobile">Paths</th>
-                            <th style="text-align: right;">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="snapshotsTable">
-                        <tr><td colspan="5" class="empty-state">Loading snapshots...</td></tr>
-                    </tbody>
-                </table>
-            </div>
+        <div class="stat-card">
+            <div class="label">Oldest Snapshot</div>
+            <div class="value" id="oldestSnapshot">--</div>
         </div>
-
-        <!-- Logs Panel -->
-        <div class="panel" id="logsPanel" style="display: none;">
-            <div class="panel-header">
-                <h2 id="logsTitle">Backup Logs</h2>
-                <button class="btn btn-secondary btn-sm" onclick="loadLogs()">Refresh Logs</button>
-            </div>
-            <div class="panel-body">
-                <div class="log-viewer" id="logViewer">Loading...</div>
-            </div>
+        <div class="stat-card">
+            <div class="label">Status</div>
+            <div class="value" id="backupStatus">--</div>
+            <div class="detail" id="backupStatusDetail"></div>
         </div>
     </div>
 
-    <!-- Restore Confirmation Modal -->
-    <div class="modal-overlay" id="restoreModal">
-        <div class="modal">
-            <h3>Confirm Restore</h3>
-            <p id="restoreMessage"></p>
-            <div class="modal-actions">
-                <button class="btn btn-secondary" onclick="closeRestoreModal()">Cancel</button>
-                <button class="btn btn-danger" id="confirmRestoreBtn" onclick="confirmRestore()">
-                    Restore Snapshot
-                </button>
-            </div>
+    <!-- Actions -->
+    <div class="actions-bar">
+        <button class="btn btn-primary" onclick="triggerBackup()" id="backupBtn">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 2v8M4 6l4-4 4 4M2 14h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Create Backup Now
+        </button>
+        <button class="btn btn-secondary" onclick="loadSnapshots()">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 8a6 6 0 0111.46-2.46M14 8A6 6 0 012.54 10.46" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            Refresh
+        </button>
+        <button class="btn btn-secondary" onclick="toggleLogs()">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 4h8M4 8h6M4 12h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            View Logs
+        </button>
+    </div>
+
+    <!-- Snapshots -->
+    <div class="panel">
+        <div class="panel-header">
+            <h2 id="snapshotsTitle">Snapshots</h2>
+            <span id="snapshotCount" style="font-size:13px;color:#64748b;"></span>
+        </div>
+        <div class="panel-body">
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Date &amp; Time</th>
+                        <th class="hide-mobile">Tags</th>
+                        <th class="hide-mobile">Paths</th>
+                        <th style="text-align:right;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="snapshotsTable">
+                    <tr><td colspan="5" class="empty-state">Loading snapshots...</td></tr>
+                </tbody>
+            </table>
         </div>
     </div>
 
-    <script>
-        let currentSnapshots = [];
-        let restoreTargetId = null;
-        let activeProject = null;
-        let projects = [];
-        let projectStatuses = {};
+    <!-- Logs -->
+    <div class="panel" id="logsPanel" style="display:none;">
+        <div class="panel-header">
+            <h2 id="logsTitle">Backup Logs</h2>
+            <button class="btn btn-secondary btn-sm" onclick="loadLogs()">Refresh</button>
+        </div>
+        <div class="log-viewer" id="logViewer">Loading...</div>
+    </div>
 
-        // --- API Helpers ---
-        async function api(url, opts = {}) {
-            const res = await fetch(url, opts);
-            if (res.status === 401) { location.reload(); return null; }
-            return res.json();
-        }
+</div>
 
-        function showToast(message, type = 'success') {
-            const existing = document.querySelectorAll('.toast');
-            existing.forEach(t => t.remove());
-            const toast = document.createElement('div');
-            toast.className = `toast toast-${type}`;
-            toast.textContent = message;
-            document.body.appendChild(toast);
-            setTimeout(() => toast.remove(), 5000);
-        }
+<!-- ── Restore Confirmation Modal ── -->
+<div class="modal-overlay" id="restoreModal">
+    <div class="modal restore-modal">
+        <h3>Confirm Restore</h3>
+        <p id="restoreMessage"></p>
+        <p><strong style="color:#fca5a5;">This action cannot be undone.</strong></p>
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="closeRestoreModal()">Cancel</button>
+            <button class="btn btn-danger" id="confirmRestoreBtn" onclick="confirmRestore()">Restore Snapshot</button>
+        </div>
+    </div>
+</div>
 
-        function timeAgo(dateStr) {
-            const now = new Date();
-            const date = new Date(dateStr);
-            const seconds = Math.floor((now - date) / 1000);
-            if (seconds < 60) return 'just now';
-            const minutes = Math.floor(seconds / 60);
-            if (minutes < 60) return `${minutes}m ago`;
-            const hours = Math.floor(minutes / 60);
-            if (hours < 24) return `${hours}h ago`;
-            const days = Math.floor(hours / 24);
-            return `${days}d ago`;
-        }
+<!-- ── Add / Edit Project Modal ── -->
+<div class="modal-overlay" id="projectModal">
+    <div class="modal project-modal">
+        <h3 id="projectModalTitle">Add Project</h3>
 
-        function formatDate(dateStr) {
-            const d = new Date(dateStr);
-            return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-        }
+        <!-- Basic -->
+        <div class="form-section">
+            <div class="form-section-title">Basic Info</div>
+            <div class="form-grid">
+                <div class="form-group full">
+                    <label class="form-label">Name</label>
+                    <input type="text" class="form-input" id="pm_name" placeholder="My Database" oninput="autoFillTag()">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">DB Engine</label>
+                    <select class="form-select" id="pm_db_engine" onchange="onEngineChange()">
+                        <option value="postgres">PostgreSQL</option>
+                        <option value="mariadb">MariaDB</option>
+                        <option value="mysql">MySQL</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Project Type</label>
+                    <select class="form-select" id="pm_project_type" onchange="updateModalVisibility()">
+                        <option value="database">Database</option>
+                        <option value="wordpress">WordPress</option>
+                    </select>
+                </div>
+            </div>
+        </div>
 
-        function formatTime(dateStr) {
-            const d = new Date(dateStr);
-            return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-        }
+        <!-- Connection -->
+        <div class="form-section">
+            <div class="form-section-title">Connection</div>
+            <div class="form-group" style="margin-bottom:16px;">
+                <div class="radio-group">
+                    <label class="radio-label">
+                        <input type="radio" name="pm_conn_type" value="connection_string" checked onchange="updateModalVisibility()">
+                        Connection String
+                    </label>
+                    <label class="radio-label">
+                        <input type="radio" name="pm_conn_type" value="docker" onchange="updateModalVisibility()">
+                        Docker (local)
+                    </label>
+                </div>
+            </div>
 
-        function formatSize(bytes) {
-            if (bytes < 1024) return bytes + ' B';
-            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-            if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-            return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
-        }
+            <div id="conn_str_section">
+                <div class="form-group">
+                    <label class="form-label">Connection String</label>
+                    <input type="text" class="form-input" id="pm_connection_string"
+                           placeholder="postgresql://user:pass@host:5432/dbname">
+                    <span class="form-hint">Include the DB host as seen from the SSH server when using a tunnel</span>
+                </div>
+            </div>
 
-        function shortenPath(path) {
-            if (path.includes('drive-ev-lead-db')) return 'PG Dump';
-            if (path.includes('drive-ev-db')) return 'DB Dump';
-            if (path.includes('wp-uploads')) return 'WP Uploads';
-            return path.split('/').pop();
-        }
-
-        function getTypeIcon(type) {
-            switch (type) {
-                case 'wordpress': return 'W';
-                case 'postgres': return 'P';
-                default: return 'D';
-            }
-        }
-
-        function getTypeBadge(type) {
-            const cls = `type-${type}`;
-            return `<span class="project-type-badge ${cls}">${type}</span>`;
-        }
-
-        // --- Load Projects ---
-        async function loadProjects() {
-            const data = await api('/api/projects');
-            if (!data) return;
-            projects = data.projects || [];
-
-            if (projects.length > 0 && !activeProject) {
-                activeProject = projects[0].id;
-            }
-
-            renderProjectTabs();
-            loadSnapshots();
-            // Load statuses for all projects
-            loadAllProjectStatuses();
-        }
-
-        async function loadAllProjectStatuses() {
-            for (const p of projects) {
-                const data = await api(`/api/projects/${p.id}/snapshots`);
-                if (data && data.snapshots && data.snapshots.length > 0) {
-                    const latest = data.snapshots[0];
-                    const hoursSinceLast = (new Date() - new Date(latest.time)) / (1000 * 60 * 60);
-                    projectStatuses[p.id] = hoursSinceLast > 36 ? 'error' : 'ok';
-                } else {
-                    projectStatuses[p.id] = 'unknown';
-                }
-            }
-            renderProjectTabs();
-        }
-
-        function renderProjectTabs() {
-            const container = document.getElementById('projectTabs');
-            container.innerHTML = projects.map(p => {
-                const isActive = p.id === activeProject;
-                const status = projectStatuses[p.id] || 'unknown';
-                return `
-                    <div class="project-tab ${isActive ? 'active' : ''}" onclick="switchProject('${p.id}')">
-                        <span class="tab-status tab-status-${status}"></span>
-                        ${p.name}
-                        ${getTypeBadge(p.type)}
+            <div id="docker_section" style="display:none;">
+                <div class="form-grid">
+                    <div class="form-group full">
+                        <label class="form-label">Container ID or Name</label>
+                        <input type="text" class="form-input" id="pm_docker_container" placeholder="my_db_container">
                     </div>
-                `;
-            }).join('');
+                    <div class="form-group">
+                        <label class="form-label">DB User</label>
+                        <input type="text" class="form-input" id="pm_db_user" placeholder="postgres">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">DB Password</label>
+                        <input type="password" class="form-input" id="pm_db_pass" placeholder="••••••••">
+                        <span class="form-hint" id="pass_hint" style="display:none;">Leave blank to keep existing password</span>
+                    </div>
+                    <div class="form-group full">
+                        <label class="form-label">DB Name</label>
+                        <input type="text" class="form-input" id="pm_db_name" placeholder="mydb">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SSH Tunnel -->
+        <div class="form-section" id="ssh_section">
+            <div class="form-section-title">SSH Tunnel <span style="font-size:10px;color:#475569;text-transform:none;letter-spacing:0;">(optional — for remote VPS)</span></div>
+            <div class="toggle-box">
+                <label>
+                    <input type="checkbox" id="ssh_enabled" onchange="updateModalVisibility()">
+                    Enable SSH tunnel to remote VPS
+                </label>
+                <div class="toggle-content" id="ssh_fields" style="display:none;">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label">SSH Host</label>
+                            <input type="text" class="form-input" id="pm_ssh_host" placeholder="vps.example.com">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">SSH Port</label>
+                            <input type="number" class="form-input" id="pm_ssh_port" value="22">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">SSH User</label>
+                            <input type="text" class="form-input" id="pm_ssh_user" placeholder="ubuntu">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">SSH Key Path</label>
+                            <input type="text" class="form-input" id="pm_ssh_key" placeholder="/opt/backups/keys/remote.pem">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Retention -->
+        <div class="form-section">
+            <div class="form-section-title">Retention Policy</div>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label">Keep Daily</label>
+                    <input type="number" class="form-input" id="pm_keep_daily" value="7" min="0">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Keep Weekly</label>
+                    <input type="number" class="form-input" id="pm_keep_weekly" value="4" min="0">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Keep Monthly</label>
+                    <input type="number" class="form-input" id="pm_keep_monthly" value="6" min="0">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Keep Yearly</label>
+                    <input type="number" class="form-input" id="pm_keep_yearly" value="1" min="0">
+                </div>
+            </div>
+        </div>
+
+        <!-- Advanced -->
+        <div class="form-section">
+            <div class="form-section-title">Advanced</div>
+            <div class="form-grid">
+                <div class="form-group full">
+                    <label class="form-label">Restic Tag</label>
+                    <input type="text" class="form-input" id="pm_restic_tag" placeholder="my-db">
+                    <span class="form-hint">Auto-filled from name. Used to filter snapshots in Restic.</span>
+                </div>
+                <div class="form-group full">
+                    <label class="form-label">Backup Script <span style="color:#475569;">(optional — overrides built-in backup)</span></label>
+                    <input type="text" class="form-input" id="pm_backup_script" placeholder="/opt/backups/backup.sh">
+                </div>
+                <div class="form-group full">
+                    <label class="form-label">Log File <span style="color:#475569;">(optional)</span></label>
+                    <input type="text" class="form-input" id="pm_log_file" placeholder="/opt/backups/my-db.log">
+                    <span class="form-hint">Defaults to /opt/backups/{tag}.log</span>
+                </div>
+                <div class="form-group full" id="wp_field" style="display:none;">
+                    <label class="form-label">WordPress Volume Resource ID</label>
+                    <input type="text" class="form-input" id="pm_wp_resource_id" placeholder="docker_volume_resource_id">
+                    <span class="form-hint">The Docker volume ID for wp-uploads (used for file backup &amp; restore)</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="closeProjectModal()">Cancel</button>
+            <button class="btn btn-primary" id="saveProjectBtn" onclick="saveProject()">Add Project</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let currentSnapshots = [];
+    let restoreTargetId  = null;
+    let activeProject    = null;
+    let projects         = [];
+    let projectStatuses  = {};
+    let editingProjectId = null;
+    let logsVisible      = false;
+
+    // ── API ──────────────────────────────────────────────────────────────────
+
+    async function api(url, opts = {}) {
+        const res = await fetch(url, opts);
+        if (res.status === 401) { location.reload(); return null; }
+        return res.json();
+    }
+
+    function showToast(message, type = 'success') {
+        document.querySelectorAll('.toast').forEach(t => t.remove());
+        const t = document.createElement('div');
+        t.className = `toast toast-${type}`;
+        t.textContent = message;
+        document.body.appendChild(t);
+        setTimeout(() => t.remove(), 5000);
+    }
+
+    // ── Time / Format ─────────────────────────────────────────────────────────
+
+    function timeAgo(dateStr) {
+        const s = Math.floor((new Date() - new Date(dateStr)) / 1000);
+        if (s < 60)  return 'just now';
+        const m = Math.floor(s / 60);
+        if (m < 60)  return `${m}m ago`;
+        const h = Math.floor(m / 60);
+        if (h < 24)  return `${h}h ago`;
+        return `${Math.floor(h / 24)}d ago`;
+    }
+
+    function formatDate(dateStr) {
+        return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+
+    function formatTime(dateStr) {
+        return new Date(dateStr).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function formatSize(bytes) {
+        if (bytes < 1024)            return bytes + ' B';
+        if (bytes < 1024 ** 2)       return (bytes / 1024).toFixed(1) + ' KB';
+        if (bytes < 1024 ** 3)       return (bytes / 1024 ** 2).toFixed(1) + ' MB';
+        return (bytes / 1024 ** 3).toFixed(2) + ' GB';
+    }
+
+    function escapeHtml(str) {
+        const d = document.createElement('div');
+        d.textContent = str || '';
+        return d.innerHTML;
+    }
+
+    function shortenPath(path) {
+        const p = path.toLowerCase();
+        if (p.includes('wp-upload')) return 'WP Uploads';
+        const f = path.split('/').pop();
+        if (f.endsWith('.sql')) return 'DB Dump';
+        return f || path;
+    }
+
+    function getEngineBadge(engine) {
+        const map = {
+            postgres: ['PG',    'badge-pg'],
+            mariadb:  ['Maria', 'badge-maria'],
+            mysql:    ['MySQL', 'badge-mysql'],
+        };
+        const [label, cls] = map[engine] || [engine, 'badge-pg'];
+        return `<span class="engine-badge ${cls}">${label}</span>`;
+    }
+
+    // ── Projects ─────────────────────────────────────────────────────────────
+
+    async function loadProjects() {
+        const data = await api('/api/projects');
+        if (!data) return;
+        projects = data.projects || [];
+
+        if (projects.length > 0 && !activeProject) {
+            activeProject = projects[0].id;
         }
 
-        function switchProject(projectId) {
-            activeProject = projectId;
-            renderProjectTabs();
-            loadSnapshots();
-            if (logsVisible) loadLogs();
-        }
+        renderProjectTabs();
+        if (activeProject) loadSnapshots();
+        loadAllProjectStatuses();
+    }
 
-        // --- Load Snapshots ---
-        async function loadSnapshots() {
-            if (!activeProject) return;
-            const data = await api(`/api/projects/${activeProject}/snapshots`);
-            if (!data) return;
-
-            if (data.error) {
-                showToast(data.error, 'error');
-                return;
-            }
-
-            currentSnapshots = data.snapshots || [];
-            const project = projects.find(p => p.id === activeProject);
-            document.getElementById('snapshotsTitle').textContent = `Snapshots - ${project ? project.name : ''}`;
-            renderSnapshots();
-            updateStats();
-        }
-
-        function renderSnapshots() {
-            const tbody = document.getElementById('snapshotsTable');
-
-            if (currentSnapshots.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No snapshots found for this project</td></tr>';
-                return;
-            }
-
-            tbody.innerHTML = currentSnapshots.map(s => `
-                <tr>
-                    <td><span class="snapshot-id">${s.id}</span></td>
-                    <td>
-                        <span class="snapshot-time">
-                            <span class="date">${formatDate(s.time)}</span> ${formatTime(s.time)}
-                            <span class="ago">${timeAgo(s.time)}</span>
-                        </span>
-                    </td>
-                    <td class="hide-mobile">${s.tags.map(t => `<span class="tag">${t}</span>`).join('')}</td>
-                    <td class="hide-mobile" style="font-size: 12px; color: #64748b;">${s.paths.map(shortenPath).join(', ')}</td>
-                    <td style="text-align: right;">
-                        <button class="btn btn-secondary btn-sm" onclick="downloadSnapshot('${s.id}')" title="Download">
-                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 2v8M4 10l4 4 4-4M2 14h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                            Download
-                        </button>
-                        <button class="btn btn-danger btn-sm" onclick="openRestoreModal('${s.id}')" title="Restore" style="margin-left: 4px;">
-                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M2 8a6 6 0 0111.46-2.46M14 8A6 6 0 012.54 10.46" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-                            Restore
-                        </button>
-                    </td>
-                </tr>
-            `).join('');
-        }
-
-        function updateStats() {
-            const badge = document.getElementById('statusBadge');
-            document.getElementById('totalSnapshots').textContent = currentSnapshots.length;
-            document.getElementById('snapshotCount').textContent = `${currentSnapshots.length} snapshots`;
-
-            if (currentSnapshots.length > 0) {
-                const latest = currentSnapshots[0];
-                const oldest = currentSnapshots[currentSnapshots.length - 1];
-                document.getElementById('lastBackupTime').textContent = formatDate(latest.time);
-                document.getElementById('lastBackupAgo').textContent = timeAgo(latest.time);
-                document.getElementById('oldestSnapshot').textContent = formatDate(oldest.time);
-
-                const hoursSinceLast = (new Date() - new Date(latest.time)) / (1000 * 60 * 60);
-                if (hoursSinceLast > 36) {
-                    document.getElementById('backupStatus').textContent = 'Stale';
-                    document.getElementById('backupStatus').style.color = '#fca5a5';
-                    document.getElementById('backupStatusDetail').textContent = 'Last backup is older than 36 hours';
-                    badge.className = 'status-badge status-error';
-                    badge.textContent = 'Stale';
-                } else {
-                    document.getElementById('backupStatus').textContent = 'Healthy';
-                    document.getElementById('backupStatus').style.color = '#6ee7b7';
-                    document.getElementById('backupStatusDetail').textContent = 'Backups are running on schedule';
-                    badge.className = 'status-badge status-ok';
-                    badge.textContent = 'Healthy';
-                }
+    async function loadAllProjectStatuses() {
+        for (const p of projects) {
+            const data = await api(`/api/projects/${p.id}/snapshots`);
+            if (data && data.snapshots && data.snapshots.length > 0) {
+                const h = (new Date() - new Date(data.snapshots[0].time)) / 3600000;
+                projectStatuses[p.id] = h > 36 ? 'error' : 'ok';
             } else {
-                document.getElementById('lastBackupTime').textContent = '--';
-                document.getElementById('lastBackupAgo').textContent = '';
-                document.getElementById('oldestSnapshot').textContent = '--';
-                document.getElementById('backupStatus').textContent = 'No Data';
-                document.getElementById('backupStatus').style.color = '#64748b';
-                document.getElementById('backupStatusDetail').textContent = 'No snapshots found';
+                projectStatuses[p.id] = 'unknown';
+            }
+        }
+        renderProjectTabs();
+    }
+
+    function renderProjectTabs() {
+        const container = document.getElementById('projectTabs');
+        if (projects.length === 0) {
+            container.innerHTML = '<span style="color:#64748b;font-size:14px;">No projects — add one to get started.</span>';
+            updateStats([]);
+            return;
+        }
+        container.innerHTML = projects.map(p => {
+            const active = p.id === activeProject;
+            const status = projectStatuses[p.id] || 'unknown';
+            const sshDot = p.ssh ? '<span class="ssh-dot" title="SSH tunnel">⚡</span>' : '';
+            return `
+                <div class="project-tab ${active ? 'active' : ''}"
+                     data-id="${escapeHtml(p.id)}"
+                     onclick="switchProject(this.dataset.id)">
+                    <span class="tab-status tab-status-${status}"></span>
+                    ${escapeHtml(p.name)}
+                    ${getEngineBadge(p.db_engine)}
+                    ${sshDot}
+                    <span class="tab-actions">
+                        <button class="tab-action-btn"
+                            onclick="event.stopPropagation(); openEditProjectModal(this.closest('[data-id]').dataset.id)"
+                            title="Edit">✎</button>
+                        <button class="tab-action-btn"
+                            onclick="event.stopPropagation(); deleteProject(this.closest('[data-id]').dataset.id, this.closest('[data-id]').querySelector('.engine-badge').previousSibling.textContent.trim())"
+                            title="Delete">✕</button>
+                    </span>
+                </div>`;
+        }).join('');
+    }
+
+    function switchProject(id) {
+        activeProject = id;
+        renderProjectTabs();
+        loadSnapshots();
+        if (logsVisible) loadLogs();
+    }
+
+    // ── Snapshots ─────────────────────────────────────────────────────────────
+
+    async function loadSnapshots() {
+        if (!activeProject) return;
+        const data = await api(`/api/projects/${activeProject}/snapshots`);
+        if (!data) return;
+        if (data.error) { showToast(data.error, 'error'); return; }
+
+        currentSnapshots = data.snapshots || [];
+        const project = projects.find(p => p.id === activeProject);
+        document.getElementById('snapshotsTitle').textContent =
+            `Snapshots — ${project ? escapeHtml(project.name) : ''}`;
+        renderSnapshots();
+        updateStats(currentSnapshots);
+    }
+
+    function renderSnapshots() {
+        const tbody = document.getElementById('snapshotsTable');
+        if (currentSnapshots.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No snapshots found for this project.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = currentSnapshots.map(s => `
+            <tr>
+                <td><span class="snapshot-id">${s.id}</span></td>
+                <td>
+                    ${formatDate(s.time)} ${formatTime(s.time)}
+                    <span class="snapshot-ago">${timeAgo(s.time)}</span>
+                </td>
+                <td class="hide-mobile">${s.tags.map(t => `<span class="tag">${escapeHtml(t)}</span>`).join('')}</td>
+                <td class="hide-mobile" style="font-size:12px;color:#64748b;">${s.paths.map(shortenPath).join(', ')}</td>
+                <td style="text-align:right;white-space:nowrap;">
+                    <button class="btn btn-secondary btn-sm" onclick="downloadSnapshot('${s.id}')">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 2v8M4 10l4 4 4-4M2 14h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        Download
+                    </button>
+                    <button class="btn btn-danger btn-sm" onclick="openRestoreModal('${s.id}')" style="margin-left:4px;">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M2 8a6 6 0 0111.46-2.46M14 8A6 6 0 012.54 10.46" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                        Restore
+                    </button>
+                </td>
+            </tr>`).join('');
+    }
+
+    function updateStats(snapshots) {
+        const badge = document.getElementById('statusBadge');
+        document.getElementById('totalSnapshots').textContent = snapshots.length;
+        document.getElementById('snapshotCount').textContent  = `${snapshots.length} snapshot${snapshots.length !== 1 ? 's' : ''}`;
+
+        if (snapshots.length > 0) {
+            const latest = snapshots[0];
+            const oldest = snapshots[snapshots.length - 1];
+            document.getElementById('lastBackupTime').textContent = formatDate(latest.time);
+            document.getElementById('lastBackupAgo').textContent  = timeAgo(latest.time);
+            document.getElementById('oldestSnapshot').textContent = formatDate(oldest.time);
+
+            const h = (new Date() - new Date(latest.time)) / 3600000;
+            if (h > 36) {
+                document.getElementById('backupStatus').textContent      = 'Stale';
+                document.getElementById('backupStatus').style.color      = '#fca5a5';
+                document.getElementById('backupStatusDetail').textContent = 'Last backup is older than 36 hours';
                 badge.className = 'status-badge status-error';
-                badge.textContent = 'No Backups';
+                badge.textContent = 'Stale';
+            } else {
+                document.getElementById('backupStatus').textContent      = 'Healthy';
+                document.getElementById('backupStatus').style.color      = '#6ee7b7';
+                document.getElementById('backupStatusDetail').textContent = 'Backups are up to date';
+                badge.className = 'status-badge status-ok';
+                badge.textContent = 'Healthy';
             }
+        } else {
+            document.getElementById('lastBackupTime').textContent     = '--';
+            document.getElementById('lastBackupAgo').textContent      = '';
+            document.getElementById('oldestSnapshot').textContent     = '--';
+            document.getElementById('backupStatus').textContent       = 'No Data';
+            document.getElementById('backupStatus').style.color       = '#64748b';
+            document.getElementById('backupStatusDetail').textContent = 'No snapshots found';
+            badge.className = 'status-badge status-error';
+            badge.textContent = 'No Backups';
+        }
+    }
+
+    // ── Backup ────────────────────────────────────────────────────────────────
+
+    async function triggerBackup() {
+        if (!activeProject) return;
+        const project = projects.find(p => p.id === activeProject);
+        const btn = document.getElementById('backupBtn');
+        btn.disabled = true;
+        btn.innerHTML = `<span class="spinner"></span> Backing up…`;
+
+        const data = await api(`/api/projects/${activeProject}/backup`, { method: 'POST' });
+
+        btn.disabled = false;
+        btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 2v8M4 6l4-4 4 4M2 14h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg> Create Backup Now`;
+
+        if (data && data.success) {
+            showToast('Backup completed successfully!');
+            loadSnapshots();
+            loadAllProjectStatuses();
+        } else {
+            showToast(data?.error || data?.output || 'Backup failed', 'error');
+        }
+    }
+
+    // ── Download ──────────────────────────────────────────────────────────────
+
+    async function downloadSnapshot(id) {
+        const btn = event.target.closest('button');
+        const orig = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Preparing…';
+
+        const data = await api(`/api/projects/${activeProject}/snapshots/${id}/prepare-download`, { method: 'POST' });
+
+        if (data && data.ready) {
+            showToast(`Archive ready (${formatSize(data.size)}). Downloading…`);
+            window.location.href = `/api/projects/${activeProject}/snapshots/${id}/download`;
+            setTimeout(() => api(`/api/downloads/${id}`, { method: 'DELETE' }), 60000);
+        } else {
+            showToast(data?.error || 'Failed to prepare download', 'error');
         }
 
-        // --- Trigger Backup ---
-        async function triggerBackup() {
-            if (!activeProject) return;
-            const project = projects.find(p => p.id === activeProject);
-            const btn = document.getElementById('backupBtn');
-            btn.disabled = true;
-            btn.innerHTML = `<span class="spinner"></span> Backing up ${project ? project.name : ''}...`;
+        btn.disabled = false;
+        btn.innerHTML = orig;
+    }
 
-            const data = await api(`/api/projects/${activeProject}/backup`, { method: 'POST' });
-            btn.disabled = false;
-            btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 2v8M4 6l4-4 4 4M2 14h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg> Create Backup Now`;
+    // ── Restore ───────────────────────────────────────────────────────────────
 
-            if (data && data.success) {
-                showToast('Backup completed successfully!');
+    function openRestoreModal(id) {
+        restoreTargetId = id;
+        const project = projects.find(p => p.id === activeProject);
+        document.getElementById('restoreMessage').innerHTML =
+            `You are about to restore snapshot <strong>${id}</strong> for <strong>${escapeHtml(project?.name || '')}</strong>. ` +
+            `This will overwrite the current database with the backup contents.`;
+        document.getElementById('restoreModal').classList.add('active');
+    }
+
+    function closeRestoreModal() {
+        document.getElementById('restoreModal').classList.remove('active');
+        restoreTargetId = null;
+    }
+
+    async function confirmRestore() {
+        if (!restoreTargetId || !activeProject) return;
+        const btn = document.getElementById('confirmRestoreBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Restoring…';
+
+        const data = await api(
+            `/api/projects/${activeProject}/snapshots/${restoreTargetId}/restore`,
+            { method: 'POST' },
+        );
+
+        btn.disabled = false;
+        btn.innerHTML = 'Restore Snapshot';
+        closeRestoreModal();
+
+        if (data && data.success) {
+            showToast('Restore completed: ' + data.output);
+        } else {
+            showToast(data?.error || 'Restore failed', 'error');
+        }
+    }
+
+    // ── Logs ──────────────────────────────────────────────────────────────────
+
+    function toggleLogs() {
+        logsVisible = !logsVisible;
+        document.getElementById('logsPanel').style.display = logsVisible ? 'block' : 'none';
+        if (logsVisible) loadLogs();
+    }
+
+    async function loadLogs() {
+        if (!activeProject) return;
+        const project = projects.find(p => p.id === activeProject);
+        document.getElementById('logsTitle').textContent = `Logs — ${project?.name || ''}`;
+
+        const data = await api(`/api/projects/${activeProject}/logs?lines=100`);
+        if (!data) return;
+        const lines = (data.logs || 'No logs available.').split('\n').map(line => {
+            if (/error/i.test(line))   return `<span class="log-error">${escapeHtml(line)}</span>`;
+            if (/complete|saved|INFO/i.test(line)) return `<span class="log-success">${escapeHtml(line)}</span>`;
+            return escapeHtml(line);
+        });
+        const viewer = document.getElementById('logViewer');
+        viewer.innerHTML = lines.join('\n');
+        viewer.scrollTop = viewer.scrollHeight;
+    }
+
+    // ── Project Modal ─────────────────────────────────────────────────────────
+
+    function openAddProjectModal() {
+        editingProjectId = null;
+        document.getElementById('projectModalTitle').textContent = 'Add Project';
+        document.getElementById('saveProjectBtn').textContent    = 'Add Project';
+        document.getElementById('pass_hint').style.display       = 'none';
+        resetProjectForm();
+        document.getElementById('projectModal').classList.add('active');
+    }
+
+    async function openEditProjectModal(id) {
+        editingProjectId = id;
+        document.getElementById('projectModalTitle').textContent = 'Edit Project';
+        document.getElementById('saveProjectBtn').textContent    = 'Save Changes';
+        document.getElementById('pass_hint').style.display       = 'block';
+
+        const data = await api(`/api/projects/${id}`);
+        if (!data) return;
+
+        document.getElementById('pm_name').value         = data.name            || '';
+        document.getElementById('pm_db_engine').value    = data.db_engine       || 'postgres';
+        document.getElementById('pm_project_type').value = data.project_type    || 'database';
+
+        const connType = data.connection_type || 'connection_string';
+        document.querySelector(`input[name="pm_conn_type"][value="${connType}"]`).checked = true;
+
+        document.getElementById('pm_connection_string').value  = data.connection_string  || '';
+        document.getElementById('pm_docker_container').value   = data.docker_container   || '';
+        document.getElementById('pm_db_user').value            = data.db_user            || '';
+        document.getElementById('pm_db_pass').value            = '';  // never pre-fill
+        document.getElementById('pm_db_name').value            = data.db_name            || '';
+
+        const sshOn = !!data.ssh_host;
+        document.getElementById('ssh_enabled').checked  = sshOn;
+        document.getElementById('pm_ssh_host').value    = data.ssh_host  || '';
+        document.getElementById('pm_ssh_port').value    = data.ssh_port  || 22;
+        document.getElementById('pm_ssh_user').value    = data.ssh_user  || '';
+        document.getElementById('pm_ssh_key').value     = data.ssh_key   || '';
+
+        document.getElementById('pm_keep_daily').value   = data.keep_daily   ?? 7;
+        document.getElementById('pm_keep_weekly').value  = data.keep_weekly  ?? 4;
+        document.getElementById('pm_keep_monthly').value = data.keep_monthly ?? 6;
+        document.getElementById('pm_keep_yearly').value  = data.keep_yearly  ?? 1;
+
+        document.getElementById('pm_restic_tag').value    = data.restic_tag     || '';
+        document.getElementById('pm_backup_script').value = data.backup_script  || '';
+        document.getElementById('pm_log_file').value      = data.log_file       || '';
+        document.getElementById('pm_wp_resource_id').value = data.wp_resource_id || '';
+
+        updateModalVisibility();
+        document.getElementById('projectModal').classList.add('active');
+    }
+
+    function closeProjectModal() {
+        document.getElementById('projectModal').classList.remove('active');
+        editingProjectId = null;
+    }
+
+    function resetProjectForm() {
+        ['pm_name','pm_connection_string','pm_docker_container','pm_db_user',
+         'pm_db_pass','pm_db_name','pm_ssh_host','pm_ssh_user','pm_ssh_key',
+         'pm_restic_tag','pm_backup_script','pm_log_file','pm_wp_resource_id'
+        ].forEach(id => { document.getElementById(id).value = ''; });
+
+        document.getElementById('pm_db_engine').value    = 'postgres';
+        document.getElementById('pm_project_type').value = 'database';
+        document.querySelector('input[name="pm_conn_type"][value="connection_string"]').checked = true;
+        document.getElementById('ssh_enabled').checked   = false;
+        document.getElementById('pm_ssh_port').value     = 22;
+        document.getElementById('pm_keep_daily').value   = 7;
+        document.getElementById('pm_keep_weekly').value  = 4;
+        document.getElementById('pm_keep_monthly').value = 6;
+        document.getElementById('pm_keep_yearly').value  = 1;
+        updateModalVisibility();
+    }
+
+    function updateModalVisibility() {
+        const connType    = document.querySelector('input[name="pm_conn_type"]:checked').value;
+        const projectType = document.getElementById('pm_project_type').value;
+        const sshOn       = document.getElementById('ssh_enabled').checked;
+
+        document.getElementById('conn_str_section').style.display = connType === 'connection_string' ? '' : 'none';
+        document.getElementById('docker_section').style.display   = connType === 'docker'            ? '' : 'none';
+        document.getElementById('ssh_section').style.display      = connType === 'connection_string' ? '' : 'none';
+        document.getElementById('ssh_fields').style.display       = sshOn ? '' : 'none';
+        document.getElementById('wp_field').style.display         = projectType === 'wordpress' ? '' : 'none';
+
+        onEngineChange();
+    }
+
+    function onEngineChange() {
+        const engine = document.getElementById('pm_db_engine').value;
+        const ph = {
+            postgres: 'postgresql://user:pass@host:5432/dbname',
+            mariadb:  'mysql://user:pass@host:3306/dbname',
+            mysql:    'mysql://user:pass@host:3306/dbname',
+        };
+        document.getElementById('pm_connection_string').placeholder = ph[engine] || '';
+    }
+
+    function autoFillTag() {
+        if (editingProjectId) return;
+        const tag = document.getElementById('pm_name').value
+            .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+        document.getElementById('pm_restic_tag').value = tag;
+    }
+
+    async function saveProject() {
+        const connType = document.querySelector('input[name="pm_conn_type"]:checked').value;
+        const sshOn    = document.getElementById('ssh_enabled').checked;
+
+        const body = {
+            name:             document.getElementById('pm_name').value.trim(),
+            db_engine:        document.getElementById('pm_db_engine').value,
+            project_type:     document.getElementById('pm_project_type').value,
+            connection_type:  connType,
+            connection_string: connType === 'connection_string'
+                ? document.getElementById('pm_connection_string').value.trim() : null,
+            docker_container: connType === 'docker'
+                ? document.getElementById('pm_docker_container').value.trim() : null,
+            db_user:  connType === 'docker' ? document.getElementById('pm_db_user').value.trim()  : null,
+            db_pass:  connType === 'docker' ? document.getElementById('pm_db_pass').value         : null,
+            db_name:  connType === 'docker' ? document.getElementById('pm_db_name').value.trim()  : null,
+            ssh_host: sshOn ? document.getElementById('pm_ssh_host').value.trim() : null,
+            ssh_port: sshOn ? (parseInt(document.getElementById('pm_ssh_port').value) || 22) : null,
+            ssh_user: sshOn ? document.getElementById('pm_ssh_user').value.trim() : null,
+            ssh_key:  sshOn ? document.getElementById('pm_ssh_key').value.trim()  : null,
+            keep_daily:   parseInt(document.getElementById('pm_keep_daily').value)   || 7,
+            keep_weekly:  parseInt(document.getElementById('pm_keep_weekly').value)  || 4,
+            keep_monthly: parseInt(document.getElementById('pm_keep_monthly').value) || 6,
+            keep_yearly:  parseInt(document.getElementById('pm_keep_yearly').value)  || 1,
+            restic_tag:     document.getElementById('pm_restic_tag').value.trim(),
+            backup_script:  document.getElementById('pm_backup_script').value.trim()  || null,
+            log_file:       document.getElementById('pm_log_file').value.trim()       || null,
+            wp_resource_id: document.getElementById('pm_wp_resource_id').value.trim() || null,
+        };
+
+        if (!body.name) { showToast('Name is required', 'error'); return; }
+        if (!body.restic_tag) { showToast('Restic Tag is required', 'error'); return; }
+
+        const btn = document.getElementById('saveProjectBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Saving…';
+
+        const data = editingProjectId
+            ? await api(`/api/projects/${editingProjectId}`, {
+                method: 'PUT',
+                headers: {'Content-Type':'application/json'},
+                body: JSON.stringify(body),
+              })
+            : await api('/api/projects', {
+                method: 'POST',
+                headers: {'Content-Type':'application/json'},
+                body: JSON.stringify(body),
+              });
+
+        btn.disabled = false;
+        btn.innerHTML = editingProjectId ? 'Save Changes' : 'Add Project';
+
+        if (data && data.id) {
+            showToast(editingProjectId ? 'Project updated.' : 'Project added.');
+            closeProjectModal();
+            const newId = data.id;
+            await loadProjects();
+            if (!editingProjectId) {
+                activeProject = newId;
+                renderProjectTabs();
                 loadSnapshots();
-                loadAllProjectStatuses();
-            } else {
-                showToast(data?.error || data?.output || 'Backup failed', 'error');
             }
+        } else {
+            showToast(data?.detail || 'Failed to save project', 'error');
         }
+    }
 
-        // --- Download ---
-        async function downloadSnapshot(id) {
-            if (!activeProject) return;
-            const btn = event.target.closest('button');
-            const originalHtml = btn.innerHTML;
-            btn.disabled = true;
-            btn.innerHTML = '<span class="spinner"></span> Preparing...';
-
-            const data = await api(`/api/projects/${activeProject}/snapshots/${id}/prepare-download`, { method: 'POST' });
-
-            if (data && data.ready) {
-                showToast(`Archive ready (${formatSize(data.size)}). Starting download...`);
-                window.location.href = `/api/projects/${activeProject}/snapshots/${id}/download`;
-                setTimeout(() => api(`/api/downloads/${id}`, { method: 'DELETE' }), 60000);
-            } else {
-                showToast(data?.error || 'Failed to prepare download', 'error');
+    async function deleteProject(id, name) {
+        if (!confirm(`Delete project "${name}"?\n\nThis removes it from the manager but does NOT delete existing snapshots from S3.`)) return;
+        const data = await api(`/api/projects/${id}`, { method: 'DELETE' });
+        if (data && data.deleted) {
+            showToast(`Project deleted.`);
+            if (activeProject === id) activeProject = null;
+            await loadProjects();
+            if (!activeProject && projects.length > 0) {
+                activeProject = projects[0].id;
+                renderProjectTabs();
+                loadSnapshots();
             }
-
-            btn.disabled = false;
-            btn.innerHTML = originalHtml;
+        } else {
+            showToast('Failed to delete project', 'error');
         }
+    }
 
-        // --- Restore ---
-        function openRestoreModal(id) {
-            restoreTargetId = id;
-            const project = projects.find(p => p.id === activeProject);
-            let message = `You are about to restore snapshot <strong>${id}</strong> for <strong>${project ? project.name : ''}</strong>. This will:<br><br>`;
-
-            if (project && project.type === 'wordpress') {
-                message += `- Overwrite the current MariaDB database with the backup<br>`;
-                message += `- Replace WordPress uploads with backed up files<br>`;
-            } else if (project && project.type === 'postgres') {
-                message += `- Overwrite the current PostgreSQL database with the backup<br>`;
-            } else {
-                message += `- Overwrite the current database with the backup<br>`;
-            }
-
-            message += `<br><strong style="color: #fca5a5;">This action cannot be undone.</strong> Make sure you have a current backup before proceeding.`;
-
-            document.getElementById('restoreMessage').innerHTML = message;
-            document.getElementById('restoreModal').classList.add('active');
-        }
-
-        function closeRestoreModal() {
-            document.getElementById('restoreModal').classList.remove('active');
-            restoreTargetId = null;
-        }
-
-        async function confirmRestore() {
-            if (!restoreTargetId || !activeProject) return;
-            const btn = document.getElementById('confirmRestoreBtn');
-            btn.disabled = true;
-            btn.innerHTML = '<span class="spinner"></span> Restoring...';
-
-            const data = await api(`/api/projects/${activeProject}/snapshots/${restoreTargetId}/restore`, { method: 'POST' });
-            btn.disabled = false;
-            btn.innerHTML = 'Restore Snapshot';
-            closeRestoreModal();
-
-            if (data && data.success) {
-                showToast('Restore completed: ' + data.output);
-            } else {
-                showToast(data?.error || 'Restore failed', 'error');
-            }
-        }
-
-        // --- Logs ---
-        let logsVisible = false;
-        function toggleLogs() {
-            logsVisible = !logsVisible;
-            document.getElementById('logsPanel').style.display = logsVisible ? 'block' : 'none';
-            if (logsVisible) loadLogs();
-        }
-
-        async function loadLogs() {
-            if (!activeProject) return;
-            const project = projects.find(p => p.id === activeProject);
-            document.getElementById('logsTitle').textContent = `Logs - ${project ? project.name : ''}`;
-
-            const data = await api(`/api/projects/${activeProject}/logs?lines=100`);
-            if (!data) return;
-            const viewer = document.getElementById('logViewer');
-            const lines = (data.logs || 'No logs available.').split('\n').map(line => {
-                if (line.includes('ERROR')) return `<span class="log-line-error">${escapeHtml(line)}</span>`;
-                if (line.includes('complete') || line.includes('saved')) return `<span class="log-line-success">${escapeHtml(line)}</span>`;
-                return escapeHtml(line);
-            });
-            viewer.innerHTML = lines.join('\n');
-            viewer.scrollTop = viewer.scrollHeight;
-        }
-
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-
-        // --- Init ---
-        loadProjects();
-    </script>
+    // ── Init ──────────────────────────────────────────────────────────────────
+    loadProjects();
+</script>
 </body>
 </html>
