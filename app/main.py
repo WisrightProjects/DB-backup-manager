@@ -132,10 +132,16 @@ def generate_project_id(name: str) -> str:
 
 def get_restic_env():
     env = os.environ.copy()
-    env["RESTIC_REPOSITORY"]    = RESTIC_REPO
-    env["RESTIC_PASSWORD_FILE"] = RESTIC_PASSWORD_FILE
-    env["AWS_ACCESS_KEY_ID"]    = AWS_ACCESS_KEY_ID
+    env["RESTIC_REPOSITORY"]     = RESTIC_REPO
+    env["AWS_ACCESS_KEY_ID"]     = AWS_ACCESS_KEY_ID
     env["AWS_SECRET_ACCESS_KEY"] = AWS_SECRET_ACCESS_KEY
+    # Prefer inline password env var; fall back to password file
+    restic_password = os.environ.get("RESTIC_PASSWORD", "")
+    if restic_password:
+        env["RESTIC_PASSWORD"] = restic_password
+        env.pop("RESTIC_PASSWORD_FILE", None)
+    else:
+        env["RESTIC_PASSWORD_FILE"] = RESTIC_PASSWORD_FILE
     return env
 
 
