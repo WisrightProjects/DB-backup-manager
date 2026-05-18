@@ -349,25 +349,45 @@
             </div>
         </div>
 
+        <!-- Storage -->
+        <div class="form-section">
+            <div class="form-section-title">Storage Backend</div>
+            <div class="form-group" style="margin-bottom:12px;">
+                <div class="radio-group">
+                    <label class="radio-label">
+                        <input type="radio" name="pm_storage_type" value="s3" checked onchange="updateModalVisibility()">
+                        S3 / Cantabo
+                    </label>
+                    <label class="radio-label">
+                        <input type="radio" name="pm_storage_type" value="local" onchange="updateModalVisibility()">
+                        Local VPS
+                    </label>
+                </div>
+            </div>
+            <div id="local_path_field" style="display:none;">
+                <div class="form-group">
+                    <label class="form-label">Repository Path <span style="color:#475569;">(optional)</span></label>
+                    <input type="text" class="form-input" id="pm_local_repo_path" placeholder="/opt/backups/restic/my-db">
+                    <span class="form-hint">Defaults to /opt/backups/restic/{tag} if left blank. Created automatically on first backup.</span>
+                </div>
+            </div>
+        </div>
+
         <!-- Retention -->
         <div class="form-section">
             <div class="form-section-title">Retention Policy</div>
             <div class="form-grid">
-                <div class="form-group">
-                    <label class="form-label">Keep Daily</label>
-                    <input type="number" class="form-input" id="pm_keep_daily" value="7" min="0">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Keep Weekly</label>
-                    <input type="number" class="form-input" id="pm_keep_weekly" value="4" min="0">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Keep Monthly</label>
-                    <input type="number" class="form-input" id="pm_keep_monthly" value="6" min="0">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Keep Yearly</label>
-                    <input type="number" class="form-input" id="pm_keep_yearly" value="1" min="0">
+                <div class="form-group full">
+                    <label class="form-label">Strategy</label>
+                    <select class="form-select" id="pm_retention_strategy">
+                        <option value="7d">7 days only</option>
+                        <option value="14d">14 days only</option>
+                        <option value="30d">30 days only</option>
+                        <option value="30d_4w">30 days + 4 weeks</option>
+                        <option value="90d_6m">90 days + 6 months</option>
+                        <option value="90d_6m_1y" selected>90 days + 6 months + 1 year</option>
+                        <option value="30d_12m_3y">30 days + 12 months + 3 years</option>
+                    </select>
                 </div>
             </div>
         </div>
@@ -437,6 +457,23 @@
     let projectStatuses  = {};
     let editingProjectId = null;
     let logsVisible      = false;
+
+    const RETENTION_STRATEGIES = {
+        '7d':        { keep_daily: 7,  keep_weekly: 0, keep_monthly: 0,  keep_yearly: 0 },
+        '14d':       { keep_daily: 14, keep_weekly: 0, keep_monthly: 0,  keep_yearly: 0 },
+        '30d':       { keep_daily: 30, keep_weekly: 0, keep_monthly: 0,  keep_yearly: 0 },
+        '30d_4w':    { keep_daily: 30, keep_weekly: 4, keep_monthly: 0,  keep_yearly: 0 },
+        '90d_6m':    { keep_daily: 90, keep_weekly: 0, keep_monthly: 6,  keep_yearly: 0 },
+        '90d_6m_1y': { keep_daily: 90, keep_weekly: 0, keep_monthly: 6,  keep_yearly: 1 },
+        '30d_12m_3y':{ keep_daily: 30, keep_weekly: 0, keep_monthly: 12, keep_yearly: 3 },
+    };
+
+    function retentionStrategyFromValues(d, w, m, y) {
+        for (const [key, v] of Object.entries(RETENTION_STRATEGIES)) {
+            if (v.keep_daily === d && v.keep_weekly === w && v.keep_monthly === m && v.keep_yearly === y) return key;
+        }
+        return '7d';
+    }
 
     // ── API ──────────────────────────────────────────────────────────────────
 
@@ -821,10 +858,13 @@
         document.getElementById('pm_ssh_user').value    = data.ssh_user  || '';
         document.getElementById('pm_ssh_key').value     = data.ssh_key   || '';
 
-        document.getElementById('pm_keep_daily').value   = data.keep_daily   ?? 7;
-        document.getElementById('pm_keep_weekly').value  = data.keep_weekly  ?? 4;
-        document.getElementById('pm_keep_monthly').value = data.keep_monthly ?? 6;
-        document.getElementById('pm_keep_yearly').value  = data.keep_yearly  ?? 1;
+        document.getElementById('pm_retention_strategy').value = retentionStrategyFromValues(
+            data.keep_daily ?? 7, data.keep_weekly ?? 0, data.keep_monthly ?? 0, data.keep_yearly ?? 0
+        );
+
+        const storageType = data.storage_type || 's3';
+        document.querySelector(`input[name="pm_storage_type"][value="${storageType}"]`).checked = true;
+        document.getElementById('pm_local_repo_path').value = data.local_repo_path || '';
 
         document.getElementById('pm_restic_tag').value    = data.restic_tag     || '';
         document.getElementById('pm_backup_script').value = data.backup_script  || '';
@@ -844,7 +884,8 @@
     function resetProjectForm() {
         ['pm_name','pm_connection_string','pm_docker_container','pm_db_user',
          'pm_db_pass','pm_db_name','pm_ssh_host','pm_ssh_user','pm_ssh_key',
-         'pm_restic_tag','pm_backup_script','pm_log_file','pm_wp_resource_id'
+         'pm_restic_tag','pm_backup_script','pm_log_file','pm_wp_resource_id',
+         'pm_local_repo_path'
         ].forEach(id => { document.getElementById(id).value = ''; });
 
         document.getElementById('pm_db_engine').value    = 'postgres';
@@ -852,10 +893,8 @@
         document.querySelector('input[name="pm_conn_type"][value="connection_string"]').checked = true;
         document.getElementById('ssh_enabled').checked   = false;
         document.getElementById('pm_ssh_port').value     = 22;
-        document.getElementById('pm_keep_daily').value   = 7;
-        document.getElementById('pm_keep_weekly').value  = 4;
-        document.getElementById('pm_keep_monthly').value = 6;
-        document.getElementById('pm_keep_yearly').value  = 1;
+        document.getElementById('pm_retention_strategy').value = '90d_6m_1y';
+        document.querySelector('input[name="pm_storage_type"][value="s3"]').checked = true;
         setSchedulePresetFromCron('');
         updateModalVisibility();
     }
@@ -864,12 +903,14 @@
         const connType    = document.querySelector('input[name="pm_conn_type"]:checked').value;
         const projectType = document.getElementById('pm_project_type').value;
         const sshOn       = document.getElementById('ssh_enabled').checked;
+        const storageType = document.querySelector('input[name="pm_storage_type"]:checked').value;
 
         document.getElementById('conn_str_section').style.display = connType === 'connection_string' ? '' : 'none';
         document.getElementById('docker_section').style.display   = connType === 'docker'            ? '' : 'none';
         document.getElementById('ssh_section').style.display      = connType === 'connection_string' ? '' : 'none';
         document.getElementById('ssh_fields').style.display       = sshOn ? '' : 'none';
         document.getElementById('wp_field').style.display         = projectType === 'wordpress' ? '' : 'none';
+        document.getElementById('local_path_field').style.display = storageType === 'local' ? '' : 'none';
 
         onEngineChange();
     }
@@ -939,8 +980,10 @@
     }
 
     async function saveProject() {
-        const connType = document.querySelector('input[name="pm_conn_type"]:checked').value;
-        const sshOn    = document.getElementById('ssh_enabled').checked;
+        const connType  = document.querySelector('input[name="pm_conn_type"]:checked').value;
+        const sshOn     = document.getElementById('ssh_enabled').checked;
+        const retention = RETENTION_STRATEGIES[document.getElementById('pm_retention_strategy').value]
+                          || RETENTION_STRATEGIES['7d'];
 
         const body = {
             name:             document.getElementById('pm_name').value.trim(),
@@ -958,10 +1001,12 @@
             ssh_port: sshOn ? (parseInt(document.getElementById('pm_ssh_port').value) || 22) : null,
             ssh_user: sshOn ? document.getElementById('pm_ssh_user').value.trim() : null,
             ssh_key:  sshOn ? document.getElementById('pm_ssh_key').value.trim()  : null,
-            keep_daily:   parseInt(document.getElementById('pm_keep_daily').value)   || 7,
-            keep_weekly:  parseInt(document.getElementById('pm_keep_weekly').value)  || 4,
-            keep_monthly: parseInt(document.getElementById('pm_keep_monthly').value) || 6,
-            keep_yearly:  parseInt(document.getElementById('pm_keep_yearly').value)  || 1,
+            keep_daily:      retention.keep_daily,
+            keep_weekly:     retention.keep_weekly,
+            keep_monthly:    retention.keep_monthly,
+            keep_yearly:     retention.keep_yearly,
+            storage_type:    document.querySelector('input[name="pm_storage_type"]:checked').value,
+            local_repo_path: document.getElementById('pm_local_repo_path').value.trim() || null,
             restic_tag:     document.getElementById('pm_restic_tag').value.trim(),
             backup_script:  document.getElementById('pm_backup_script').value.trim()  || null,
             log_file:       document.getElementById('pm_log_file').value.trim()       || null,

@@ -79,11 +79,16 @@ def init_db():
             created_at       TEXT DEFAULT CURRENT_TIMESTAMP
         )
     """)
-    # Migrate existing DBs that predate schedule_cron column
-    try:
-        conn.execute("ALTER TABLE projects ADD COLUMN schedule_cron TEXT DEFAULT ''")
-    except sqlite3.OperationalError:
-        pass
+    # Migrate existing DBs that predate added columns
+    for migration in [
+        "ALTER TABLE projects ADD COLUMN schedule_cron TEXT DEFAULT ''",
+        "ALTER TABLE projects ADD COLUMN storage_type TEXT DEFAULT 's3'",
+        "ALTER TABLE projects ADD COLUMN local_repo_path TEXT",
+    ]:
+        try:
+            conn.execute(migration)
+        except sqlite3.OperationalError:
+            pass
     conn.commit()
     conn.close()
 
@@ -169,6 +174,8 @@ class ProjectPayload(BaseModel):
     log_file:          Optional[str] = None
     wp_resource_id:    Optional[str] = None
     schedule_cron:     Optional[str] = ""
+    storage_type:      str = "s3"
+    local_repo_path:   Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -198,6 +205,26 @@ def get_restic_env():
     env["AWS_ACCESS_KEY_ID"]     = AWS_ACCESS_KEY_ID
     env["AWS_SECRET_ACCESS_KEY"] = AWS_SECRET_ACCESS_KEY
     # Prefer inline password env var; fall back to password file
+    restic_password = os.environ.get("RESTIC_PASSWORD", "")
+    if restic_password:
+        env["RESTIC_PASSWORD"] = restic_password
+        env.pop("RESTIC_PASSWORD_FILE", None)
+    else:
+        env["RESTIC_PASSWORD_FILE"] = RESTIC_PASSWORD_FILE
+    return env
+
+
+def get_project_restic_env(project: dict) -> dict:
+    env = os.environ.copy()
+    if project.get("storage_type") == "local":
+        repo = project.get("local_repo_path") or f"/opt/backups/restic/{project['restic_tag']}"
+        env["RESTIC_REPOSITORY"] = repo
+        env.pop("AWS_ACCESS_KEY_ID", None)
+        env.pop("AWS_SECRET_ACCESS_KEY", None)
+    else:
+        env["RESTIC_REPOSITORY"]     = RESTIC_REPO
+        env["AWS_ACCESS_KEY_ID"]     = AWS_ACCESS_KEY_ID
+        env["AWS_SECRET_ACCESS_KEY"] = AWS_SECRET_ACCESS_KEY
     restic_password = os.environ.get("RESTIC_PASSWORD", "")
     if restic_password:
         env["RESTIC_PASSWORD"] = restic_password
@@ -440,9 +467,25 @@ def run_app_backup(project: dict) -> tuple[bool, str]:
                 backup_paths.append(str(uploads))
                 lines.append(f"Including WordPress uploads")
 
+        restic_env = get_project_restic_env(project)
+
+        # Auto-init local repo on first use
+        if project.get("storage_type") == "local":
+            repo_path = Path(project.get("local_repo_path") or f"/opt/backups/restic/{project['restic_tag']}")
+            if not (repo_path / "config").exists():
+                repo_path.mkdir(parents=True, exist_ok=True)
+                r_init = subprocess.run(
+                    ["restic", "init"], env=restic_env,
+                    capture_output=True, text=True, timeout=30,
+                )
+                if r_init.returncode != 0:
+                    append_log(log_file, f"ERROR: Failed to init local repo: {r_init.stderr.strip()}")
+                    return False, f"Failed to init local repo: {r_init.stderr.strip()}"
+                append_log(log_file, "INFO: Local restic repo initialised")
+
         r = subprocess.run(
             ["restic", "backup"] + backup_paths + ["--tag", tag],
-            env=get_restic_env(), capture_output=True, text=True, timeout=600,
+            env=restic_env, capture_output=True, text=True, timeout=600,
         )
         if r.returncode != 0:
             append_log(log_file, f"ERROR: Restic backup failed: {r.stderr.strip()}")
@@ -458,7 +501,7 @@ def run_app_backup(project: dict) -> tuple[bool, str]:
              "--keep-monthly", str(project.get("keep_monthly", 6)),
              "--keep-yearly",  str(project.get("keep_yearly",  1)),
              "--prune"],
-            env=get_restic_env(), capture_output=True, text=True, timeout=300,
+            env=restic_env, capture_output=True, text=True, timeout=300,
         )
         if r.returncode == 0:
             lines.append("Retention policy applied.")
@@ -486,7 +529,7 @@ def run_restore(project: dict, snapshot_id: str) -> tuple[bool, str]:
     try:
         r = subprocess.run(
             ["restic", "restore", snapshot_id, "--target", str(restore_dir)],
-            env=get_restic_env(), capture_output=True, text=True, timeout=600,
+            env=get_project_restic_env(project), capture_output=True, text=True, timeout=600,
         )
         if r.returncode != 0:
             return False, f"Restic restore failed: {r.stderr}"
@@ -575,14 +618,15 @@ def create_project(body: ProjectPayload, user: str = Depends(verify_auth)):
             docker_container,db_user,db_pass,db_name,
             ssh_host,ssh_port,ssh_user,ssh_key,
             keep_daily,keep_weekly,keep_monthly,keep_yearly,
-            restic_tag,backup_script,log_file,wp_resource_id,schedule_cron)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            restic_tag,backup_script,log_file,wp_resource_id,schedule_cron,
+            storage_type,local_repo_path)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (project_id, body.name, body.db_engine, body.project_type, body.connection_type,
          body.connection_string, body.docker_container, body.db_user, body.db_pass, body.db_name,
          body.ssh_host, body.ssh_port, body.ssh_user, body.ssh_key,
          body.keep_daily, body.keep_weekly, body.keep_monthly, body.keep_yearly,
          body.restic_tag, body.backup_script, body.log_file, body.wp_resource_id,
-         body.schedule_cron or ""),
+         body.schedule_cron or "", body.storage_type, body.local_repo_path),
     )
     conn.commit()
     conn.close()
@@ -608,14 +652,15 @@ def update_project(project_id: str, body: ProjectPayload, user: str = Depends(ve
            docker_container=?,db_user=?,db_pass=?,db_name=?,
            ssh_host=?,ssh_port=?,ssh_user=?,ssh_key=?,
            keep_daily=?,keep_weekly=?,keep_monthly=?,keep_yearly=?,
-           restic_tag=?,backup_script=?,log_file=?,wp_resource_id=?,schedule_cron=?
+           restic_tag=?,backup_script=?,log_file=?,wp_resource_id=?,schedule_cron=?,
+           storage_type=?,local_repo_path=?
            WHERE id=?""",
         (body.name, body.db_engine, body.project_type, body.connection_type, body.connection_string,
          body.docker_container, body.db_user, db_pass, body.db_name,
          body.ssh_host, body.ssh_port, body.ssh_user, body.ssh_key,
          body.keep_daily, body.keep_weekly, body.keep_monthly, body.keep_yearly,
          body.restic_tag, body.backup_script, body.log_file, body.wp_resource_id,
-         body.schedule_cron or "", project_id),
+         body.schedule_cron or "", body.storage_type, body.local_repo_path, project_id),
     )
     conn.commit()
     conn.close()
@@ -647,7 +692,7 @@ def list_snapshots(project_id: str, user: str = Depends(verify_auth)):
     try:
         r = subprocess.run(
             ["restic", "snapshots", "--json", "--tag", project["restic_tag"]],
-            env=get_restic_env(), capture_output=True, text=True, timeout=30,
+            env=get_project_restic_env(project), capture_output=True, text=True, timeout=30,
         )
         if r.returncode != 0:
             return JSONResponse({"error": r.stderr.strip()}, status_code=500)
@@ -686,7 +731,7 @@ def trigger_backup(project_id: str, user: str = Depends(verify_auth)):
 
 @app.post("/api/projects/{project_id}/snapshots/{snapshot_id}/prepare-download")
 def prepare_download(project_id: str, snapshot_id: str, user: str = Depends(verify_auth)):
-    get_project_or_404(project_id)
+    project = get_project_or_404(project_id)
     restore_dir  = DOWNLOAD_DIR / snapshot_id
     archive_path = DOWNLOAD_DIR / f"{snapshot_id}.tar.gz"
 
@@ -698,7 +743,7 @@ def prepare_download(project_id: str, snapshot_id: str, user: str = Depends(veri
     try:
         r = subprocess.run(
             ["restic", "restore", snapshot_id, "--target", str(restore_dir)],
-            env=get_restic_env(), capture_output=True, text=True, timeout=600,
+            env=get_project_restic_env(project), capture_output=True, text=True, timeout=600,
         )
         if r.returncode != 0:
             return JSONResponse({"error": r.stderr.strip()}, status_code=500)
