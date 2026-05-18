@@ -168,6 +168,11 @@
             <div class="value" id="backupStatus">--</div>
             <div class="detail" id="backupStatusDetail"></div>
         </div>
+        <div class="stat-card">
+            <div class="label">Next Scheduled Backup</div>
+            <div class="value" id="nextBackupTime" style="font-size:18px;">--</div>
+            <div class="detail" id="nextBackupDetail"></div>
+        </div>
     </div>
 
     <!-- Actions -->
@@ -367,6 +372,30 @@
             </div>
         </div>
 
+        <!-- Schedule -->
+        <div class="form-section">
+            <div class="form-section-title">Backup Schedule</div>
+            <div class="form-grid">
+                <div class="form-group full">
+                    <label class="form-label">Preset</label>
+                    <select class="form-select" id="pm_schedule_preset" onchange="applySchedulePreset()">
+                        <option value="">Disabled (manual only)</option>
+                        <option value="0 2 * * *">Daily at 2:00 AM</option>
+                        <option value="0 0 * * *">Daily at midnight</option>
+                        <option value="0 2 * * 0">Weekly — Sunday at 2:00 AM</option>
+                        <option value="0 2 1 * *">Monthly — 1st at 2:00 AM</option>
+                        <option value="0 * * * *">Every hour</option>
+                        <option value="custom">Custom cron expression</option>
+                    </select>
+                </div>
+                <div class="form-group full" id="custom_cron_field" style="display:none;">
+                    <label class="form-label">Cron Expression</label>
+                    <input type="text" class="form-input" id="pm_schedule_cron" placeholder="0 2 * * *">
+                    <span class="form-hint">Format: minute hour day month weekday &nbsp;·&nbsp; Times are in <strong>UTC</strong> (set TIMEZONE env var to change)</span>
+                </div>
+            </div>
+        </div>
+
         <!-- Advanced -->
         <div class="form-section">
             <div class="form-section-title">Advanced</div>
@@ -490,6 +519,7 @@
 
         renderProjectTabs();
         if (activeProject) loadSnapshots();
+        updateNextRunStat();
         loadAllProjectStatuses();
     }
 
@@ -541,7 +571,24 @@
         activeProject = id;
         renderProjectTabs();
         loadSnapshots();
+        updateNextRunStat();
         if (logsVisible) loadLogs();
+    }
+
+    function updateNextRunStat() {
+        const project = projects.find(p => p.id === activeProject);
+        const el      = document.getElementById('nextBackupTime');
+        const detail  = document.getElementById('nextBackupDetail');
+        if (!project || !project.next_run) {
+            el.textContent     = 'Not scheduled';
+            el.style.color     = '#64748b';
+            detail.textContent = project?.schedule_cron ? '' : 'Set a schedule in project settings';
+            return;
+        }
+        const fmt = formatNextRun(project.next_run);
+        el.textContent     = fmt ? fmt.label : '--';
+        el.style.color     = '#f8fafc';
+        detail.textContent = fmt ? fmt.detail : '';
     }
 
     // ── Snapshots ─────────────────────────────────────────────────────────────
@@ -783,6 +830,7 @@
         document.getElementById('pm_backup_script').value = data.backup_script  || '';
         document.getElementById('pm_log_file').value      = data.log_file       || '';
         document.getElementById('pm_wp_resource_id').value = data.wp_resource_id || '';
+        setSchedulePresetFromCron(data.schedule_cron || '');
 
         updateModalVisibility();
         document.getElementById('projectModal').classList.add('active');
@@ -808,6 +856,7 @@
         document.getElementById('pm_keep_weekly').value  = 4;
         document.getElementById('pm_keep_monthly').value = 6;
         document.getElementById('pm_keep_yearly').value  = 1;
+        setSchedulePresetFromCron('');
         updateModalVisibility();
     }
 
@@ -833,6 +882,53 @@
             mysql:    'mysql://user:pass@host:3306/dbname',
         };
         document.getElementById('pm_connection_string').placeholder = ph[engine] || '';
+    }
+
+    function applySchedulePreset() {
+        const val = document.getElementById('pm_schedule_preset').value;
+        const customField = document.getElementById('custom_cron_field');
+        const cronInput   = document.getElementById('pm_schedule_cron');
+        if (val === 'custom') {
+            customField.style.display = '';
+            cronInput.value = '';
+        } else {
+            customField.style.display = 'none';
+            cronInput.value = val;
+        }
+    }
+
+    function setSchedulePresetFromCron(cron) {
+        const preset = document.getElementById('pm_schedule_preset');
+        const cronInput = document.getElementById('pm_schedule_cron');
+        const presetValues = Array.from(preset.options).map(o => o.value);
+        if (!cron) {
+            preset.value = '';
+            cronInput.value = '';
+            document.getElementById('custom_cron_field').style.display = 'none';
+        } else if (presetValues.includes(cron)) {
+            preset.value = cron;
+            cronInput.value = cron;
+            document.getElementById('custom_cron_field').style.display = 'none';
+        } else {
+            preset.value = 'custom';
+            cronInput.value = cron;
+            document.getElementById('custom_cron_field').style.display = '';
+        }
+    }
+
+    function formatNextRun(isoStr) {
+        if (!isoStr) return null;
+        const d    = new Date(isoStr);
+        const now  = new Date();
+        const diff = d - now;
+        const h    = Math.floor(diff / 3600000);
+        const m    = Math.floor((diff % 3600000) / 60000);
+        const time = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZoneName: 'short' });
+        if (diff < 0)          return { label: 'Running soon', detail: time };
+        if (h < 1)             return { label: `in ${m}m`, detail: time };
+        if (h < 24)            return { label: `in ${h}h ${m}m`, detail: time };
+        const days = Math.floor(h / 24);
+        return { label: `in ${days}d`, detail: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' at ' + time };
     }
 
     function autoFillTag() {
@@ -870,6 +966,7 @@
             backup_script:  document.getElementById('pm_backup_script').value.trim()  || null,
             log_file:       document.getElementById('pm_log_file').value.trim()       || null,
             wp_resource_id: document.getElementById('pm_wp_resource_id').value.trim() || null,
+            schedule_cron:  document.getElementById('pm_schedule_cron').value.trim()  || "",
         };
 
         if (!body.name) { showToast('Name is required', 'error'); return; }

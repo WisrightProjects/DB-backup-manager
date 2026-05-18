@@ -14,6 +14,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
+
 from fastapi import FastAPI, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
@@ -30,6 +33,7 @@ AUTH_PASSWORD        = os.environ.get("AUTH_PASSWORD", "changeme")
 AWS_ACCESS_KEY_ID    = os.environ.get("AWS_ACCESS_KEY_ID", "")
 AWS_SECRET_ACCESS_KEY = os.environ.get("AWS_SECRET_ACCESS_KEY", "")
 DB_PATH              = os.environ.get("DB_PATH", "/opt/backups/backup-manager.db")
+TIMEZONE             = os.environ.get("TIMEZONE", "UTC")
 
 DOWNLOAD_DIR = Path("/tmp/backup-downloads")
 DOWNLOAD_DIR.mkdir(exist_ok=True)
@@ -71,14 +75,71 @@ def init_db():
             backup_script    TEXT,
             log_file         TEXT,
             wp_resource_id   TEXT,
+            schedule_cron    TEXT DEFAULT '',
             created_at       TEXT DEFAULT CURRENT_TIMESTAMP
         )
     """)
+    # Migrate existing DBs that predate schedule_cron column
+    try:
+        conn.execute("ALTER TABLE projects ADD COLUMN schedule_cron TEXT DEFAULT ''")
+    except sqlite3.OperationalError:
+        pass
     conn.commit()
     conn.close()
 
 
 init_db()
+
+
+# ---------------------------------------------------------------------------
+# Scheduler
+# ---------------------------------------------------------------------------
+
+scheduler = BackgroundScheduler(timezone=TIMEZONE)
+
+
+def _backup_job(project_id: str):
+    conn = get_db()
+    row = conn.execute("SELECT * FROM projects WHERE id = ?", (project_id,)).fetchone()
+    conn.close()
+    if not row:
+        return
+    project = dict(row)
+    success, output = run_app_backup(project)
+    append_log(get_log_file(project),
+               f"INFO: Scheduled backup {'succeeded' if success else 'FAILED'}: {output[:200]}")
+
+
+def _sync_schedule(project: dict):
+    job_id = f"backup_{project['id']}"
+    if scheduler.get_job(job_id):
+        scheduler.remove_job(job_id)
+    cron = (project.get("schedule_cron") or "").strip()
+    if cron:
+        try:
+            scheduler.add_job(
+                _backup_job,
+                CronTrigger.from_crontab(cron, timezone=TIMEZONE),
+                id=job_id,
+                args=[project["id"]],
+                replace_existing=True,
+            )
+        except Exception as e:
+            append_log(get_log_file(project), f"ERROR: Invalid cron expression '{cron}': {e}")
+
+
+def _load_all_schedules():
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT * FROM projects WHERE schedule_cron IS NOT NULL AND schedule_cron != ''"
+    ).fetchall()
+    conn.close()
+    for row in rows:
+        _sync_schedule(dict(row))
+
+
+scheduler.start()
+_load_all_schedules()
 
 
 # ---------------------------------------------------------------------------
@@ -107,6 +168,7 @@ class ProjectPayload(BaseModel):
     backup_script:     Optional[str] = None
     log_file:          Optional[str] = None
     wp_resource_id:    Optional[str] = None
+    schedule_cron:     Optional[str] = ""
 
 
 # ---------------------------------------------------------------------------
@@ -485,20 +547,22 @@ def list_projects(user: str = Depends(verify_auth)):
     conn = get_db()
     rows = conn.execute("SELECT * FROM projects ORDER BY created_at").fetchall()
     conn.close()
-    return {
-        "projects": [
-            {
-                "id":              r["id"],
-                "name":            r["name"],
-                "type":            r["project_type"],
-                "db_engine":       r["db_engine"],
-                "connection_type": r["connection_type"],
-                "tag":             r["restic_tag"],
-                "ssh":             bool(r["ssh_host"]),
-            }
-            for r in rows
-        ]
-    }
+    projects = []
+    for r in rows:
+        job = scheduler.get_job(f"backup_{r['id']}")
+        next_run = job.next_run_time.isoformat() if job and job.next_run_time else None
+        projects.append({
+            "id":              r["id"],
+            "name":            r["name"],
+            "type":            r["project_type"],
+            "db_engine":       r["db_engine"],
+            "connection_type": r["connection_type"],
+            "tag":             r["restic_tag"],
+            "ssh":             bool(r["ssh_host"]),
+            "schedule_cron":   r["schedule_cron"] or "",
+            "next_run":        next_run,
+        })
+    return {"projects": projects}
 
 
 @app.post("/api/projects", status_code=201)
@@ -511,16 +575,19 @@ def create_project(body: ProjectPayload, user: str = Depends(verify_auth)):
             docker_container,db_user,db_pass,db_name,
             ssh_host,ssh_port,ssh_user,ssh_key,
             keep_daily,keep_weekly,keep_monthly,keep_yearly,
-            restic_tag,backup_script,log_file,wp_resource_id)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            restic_tag,backup_script,log_file,wp_resource_id,schedule_cron)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (project_id, body.name, body.db_engine, body.project_type, body.connection_type,
          body.connection_string, body.docker_container, body.db_user, body.db_pass, body.db_name,
          body.ssh_host, body.ssh_port, body.ssh_user, body.ssh_key,
          body.keep_daily, body.keep_weekly, body.keep_monthly, body.keep_yearly,
-         body.restic_tag, body.backup_script, body.log_file, body.wp_resource_id),
+         body.restic_tag, body.backup_script, body.log_file, body.wp_resource_id,
+         body.schedule_cron or ""),
     )
     conn.commit()
     conn.close()
+    project = get_project_or_404(project_id)
+    _sync_schedule(project)
     return {"id": project_id, "name": body.name}
 
 
@@ -541,23 +608,28 @@ def update_project(project_id: str, body: ProjectPayload, user: str = Depends(ve
            docker_container=?,db_user=?,db_pass=?,db_name=?,
            ssh_host=?,ssh_port=?,ssh_user=?,ssh_key=?,
            keep_daily=?,keep_weekly=?,keep_monthly=?,keep_yearly=?,
-           restic_tag=?,backup_script=?,log_file=?,wp_resource_id=?
+           restic_tag=?,backup_script=?,log_file=?,wp_resource_id=?,schedule_cron=?
            WHERE id=?""",
         (body.name, body.db_engine, body.project_type, body.connection_type, body.connection_string,
          body.docker_container, body.db_user, db_pass, body.db_name,
          body.ssh_host, body.ssh_port, body.ssh_user, body.ssh_key,
          body.keep_daily, body.keep_weekly, body.keep_monthly, body.keep_yearly,
          body.restic_tag, body.backup_script, body.log_file, body.wp_resource_id,
-         project_id),
+         body.schedule_cron or "", project_id),
     )
     conn.commit()
     conn.close()
+    project = get_project_or_404(project_id)
+    _sync_schedule(project)
     return {"id": project_id, "name": body.name}
 
 
 @app.delete("/api/projects/{project_id}")
 def delete_project(project_id: str, user: str = Depends(verify_auth)):
     get_project_or_404(project_id)
+    job_id = f"backup_{project_id}"
+    if scheduler.get_job(job_id):
+        scheduler.remove_job(job_id)
     conn = get_db()
     conn.execute("DELETE FROM projects WHERE id = ?", (project_id,))
     conn.commit()
