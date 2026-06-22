@@ -27,8 +27,10 @@ services:
       - PG_USER=postgres
       - PG_PASS=${PG_PASS}
       - PG_DB=postgres
+      - HOST_BACKUP_ROOT=${HOST_BACKUP_ROOT:-/srv}
     volumes:
       - /opt/backups:/opt/backups:rw
       - /var/run/docker.sock:/var/run/docker.sock
       - /var/lib/docker/volumes:/var/lib/docker/volumes:rw
+      - ${HOST_BACKUP_ROOT:-/srv}:${HOST_BACKUP_ROOT:-/srv}:rw   # backup + restore host dirs (BKP-1)
     restart: unless-stopped
