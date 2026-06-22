@@ -80,6 +80,35 @@
     </div>
   </div>
 
+  <!-- ── Restore modal (scope + typed confirm — BKP-1.6 / AC9) ── -->
+  <div class="modal-wrap" id="restoreWrap">
+    <div class="modal">
+      <h3>Restore snapshot</h3>
+      <p id="restoreBody"></p>
+
+      <div class="fgroup" style="margin-top:16px;">
+        <span class="flabel">What to restore</span>
+        <div class="seg" id="restoreScope">
+          <label><input type="radio" name="restoreScope" value="all" checked>Everything</label>
+          <label><input type="radio" name="restoreScope" value="db">Database only</label>
+          <label><input type="radio" name="restoreScope" value="files">Files only</label>
+        </div>
+      </div>
+
+      <div class="fgroup" style="margin-top:16px;">
+        <span class="flabel">Type the project name <b id="restoreName" class="mono"></b> to confirm</span>
+        <input type="text" id="restoreConfirmInput" class="finput" autocomplete="off"
+               spellcheck="false" placeholder="project name">
+        <span class="fhint">This overwrites the selected data and cannot be undone.</span>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="restoreCancel">Cancel</button>
+        <button class="btn btn-danger" id="restoreOk" disabled>Restore</button>
+      </div>
+    </div>
+  </div>
+
   <div id="toast" class="toast" role="status"></div>
 
   <script src="/static/forms.js"></script>

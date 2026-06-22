@@ -300,12 +300,15 @@ async function downloadSnapshot(projectId, snapId, btn) {
 }
 
 async function restoreSnapshot(p, snapId) {
-  const okGo = await confirmDialog('Restore snapshot',
-    `Restore <b>${esc(snapId)}</b> into <b>${esc(p.name)}</b>? This overwrites the current database with the backup contents.<br><br><b style="color:var(--err)">This cannot be undone.</b>`,
-    'Restore snapshot');
-  if (!okGo) return;
+  // Restore dialog: pick scope + type the project name to enable the button (AC9).
+  const choice = await restoreDialog(p, snapId);
+  if (!choice) return;                                    // cancelled
   toast('Restoring…', 'idle');
-  const d = await api(`/api/projects/${p.id}/snapshots/${snapId}/restore`, { method:'POST' });
+  const d = await api(`/api/projects/${p.id}/snapshots/${snapId}/restore`, {
+    method:'POST',
+    headers:{ 'Content-Type':'application/json' },
+    body: JSON.stringify({ scope: choice.scope }),        // 'all' | 'db' | 'files'
+  });
   if (d && d.success) toast('Restore complete: ' + (d.output||'').split('\n')[0], 'ok');
   else toast((d && (d.__error||d.error)) || 'Restore failed', 'err');
 }
@@ -330,6 +333,44 @@ function confirmDialog(title, bodyHtml, okLabel) {
     const close = v => { $('#confirmWrap').classList.remove('show'); $('#confirmOk').onclick=null; $('#confirmCancel').onclick=null; res(v); };
     $('#confirmOk').onclick = () => close(true);
     $('#confirmCancel').onclick = () => close(false);
+  });
+}
+
+// ── restore modal (scope + typed confirm, BKP-1.6 / AC9) ──
+// Input : project dict (needs .name) + snapshot id (display only).
+// Output: resolves { scope:'all'|'db'|'files' } on Restore, or null on cancel.
+// The Restore button stays disabled until the typed text exactly equals the
+// project name; scope and the typed value reset every time the dialog opens.
+function restoreDialog(project, snapId) {
+  return new Promise(res => {
+    const wrap = $('#restoreWrap'), ok = $('#restoreOk'), input = $('#restoreConfirmInput');
+    $('#restoreBody').innerHTML =
+      `Restore <b>${esc(snapId)}</b> into <b>${esc(project.name)}</b>.`;
+    $('#restoreName').textContent = project.name;
+
+    // Reset state on open: default scope, empty input, disabled button.
+    const allRadio = wrap.querySelector('input[name="restoreScope"][value="all"]');
+    if (allRadio) allRadio.checked = true;
+    input.value = '';
+    ok.disabled = true;
+
+    const sync = () => { ok.disabled = input.value !== project.name; };
+    const close = result => {
+      wrap.classList.remove('show');
+      input.oninput = null; ok.onclick = null; $('#restoreCancel').onclick = null;
+      input.value = ''; ok.disabled = true;                 // reset on close too
+      res(result);
+    };
+    input.oninput = sync;
+    ok.onclick = () => {
+      if (ok.disabled) return;                              // guard (AC9)
+      const scope = (wrap.querySelector('input[name="restoreScope"]:checked') || {}).value || 'all';
+      close({ scope });
+    };
+    $('#restoreCancel').onclick = () => close(null);
+
+    wrap.classList.add('show');
+    input.focus();
   });
 }
 

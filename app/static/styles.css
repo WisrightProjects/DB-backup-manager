@@ -183,6 +183,14 @@ tbody tr:hover td { background:var(--surface-2); }
 .toggle-row { display:flex; align-items:center; gap:10px; font-size:13px; color:var(--text); cursor:pointer; }
 .toggle-row input { width:16px; height:16px; accent-color:var(--accent); }
 
+/* ── Backup-contents path rows (BKP-1) ── */
+.path-row { display:grid; grid-template-columns:96px 1fr auto; gap:8px; align-items:center; margin-bottom:8px; }
+.path-source { padding:8px 9px; min-width:0; }
+.path-value { min-width:0; }
+.path-remove { width:32px; height:32px; flex-shrink:0; display:grid; place-items:center; border:1px solid var(--border); background:var(--surface-2); color:var(--text-dim); border-radius:var(--radius-sm); transition:all .12s; }
+.path-remove:hover { color:var(--err); border-color:var(--err); background:var(--err-soft); }
+.path-add { align-self:flex-start; }
+
 /* ── Confirm modal ── */
 .modal-wrap { position:fixed; inset:0; background:rgba(2,4,8,.6); display:none; align-items:center; justify-content:center; z-index:55; padding:16px; }
 .modal-wrap.show { display:flex; }
@@ -190,6 +198,19 @@ tbody tr:hover td { background:var(--surface-2); }
 .modal h3 { font-size:17px; font-weight:600; margin-bottom:10px; }
 .modal p { color:var(--text-mut); font-size:13.5px; line-height:1.6; margin-bottom:6px; }
 .modal-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:20px; }
+
+/* ── Restore-scope modal (BKP-1) — consumed by the restore section, which does
+   NOT edit this file. Class names are a cross-section contract; coordinate any
+   additions via integration notes rather than redefining here. ── */
+.restore-scope { display:flex; flex-direction:column; gap:8px; margin:14px 0 16px; }
+.restore-scope label { display:flex; align-items:flex-start; gap:10px; padding:10px 12px; border:1px solid var(--border); border-radius:var(--radius-sm); font-size:13px; color:var(--text-mut); cursor:pointer; transition:all .12s; }
+.restore-scope label:hover { border-color:var(--text-dim); color:var(--text); }
+.restore-scope label:has(input:checked) { border-color:var(--accent); background:var(--accent-soft); color:var(--text); }
+.restore-scope input { width:16px; height:16px; margin-top:1px; accent-color:var(--accent); flex-shrink:0; }
+.restore-scope .scope-desc { display:block; font-size:11.5px; color:var(--text-dim); margin-top:2px; }
+.confirm-name-input { background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius-sm); padding:9px 11px; color:var(--text); font-size:13px; width:100%; outline:none; font-family:var(--mono); transition:border-color .15s; margin-top:6px; }
+.confirm-name-input:focus { border-color:var(--accent); }
+.confirm-name-label { font-size:12px; color:var(--text-mut); }
 
 /* ── Misc ── */
 .spinner { display:inline-block; width:14px; height:14px; border:2px solid transparent; border-top-color:currentColor; border-radius:50%; animation:spin .6s linear infinite; }

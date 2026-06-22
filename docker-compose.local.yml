@@ -1,0 +1,20 @@
+# Local-only compose for testing on Windows.
+# Strips Coolify network + prod container IDs. Uses local restic storage (no S3 creds).
+services:
+  backup-manager:
+    build: .
+    ports:
+      - "8100:8000"
+    environment:
+      - AUTH_USERNAME=admin
+      - AUTH_PASSWORD=admin
+      - RESTIC_PASSWORD=localtest        # local restic repos need a password
+      - DB_PATH=/opt/backups/backup-manager.db
+      - TIMEZONE=UTC
+      - HOST_BACKUP_ROOT=${HOST_BACKUP_ROOT:-/srv}        # override to point at a local dir for AC4 (BKP-1)
+    volumes:
+      - ./local-data:/opt/backups:rw                      # sqlite db + local restic repos persist on host
+      - /var/run/docker.sock:/var/run/docker.sock         # enables "docker mode" backups of local containers
+      - /var/lib/docker/volumes:/var/lib/docker/volumes:rw   # AC3: back up a local volume (e.g. media_vol) (BKP-1)
+      - ${HOST_BACKUP_ROOT:-/srv}:${HOST_BACKUP_ROOT:-/srv}:rw   # AC4: backup + restore host dirs (BKP-1)
+    restart: unless-stopped

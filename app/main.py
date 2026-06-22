@@ -2,15 +2,9 @@ import os
 import json
 import subprocess
 import shutil
-import tempfile
 import secrets
 import sqlite3
 import re
-import socket
-import time
-import urllib.parse
-from contextlib import contextmanager
-from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -24,6 +18,9 @@ from fastapi.staticfiles import StaticFiles
 from starlette.status import HTTP_401_UNAUTHORIZED
 from pydantic import BaseModel
 
+from app import backup_paths
+from app.services import engine
+
 app = FastAPI(title="Backup Manager")
 security = HTTPBasic()
 
@@ -33,14 +30,11 @@ STATIC_DIR = Path(__file__).parent / "static"
 STATIC_DIR.mkdir(exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
-RESTIC_REPO          = os.environ.get("RESTIC_REPO", "")
-RESTIC_PASSWORD_FILE = os.environ.get("RESTIC_PASSWORD_FILE", "/opt/backups/.restic-pass")
 AUTH_USERNAME        = os.environ.get("AUTH_USERNAME", "admin")
 AUTH_PASSWORD        = os.environ.get("AUTH_PASSWORD", "changeme")
-AWS_ACCESS_KEY_ID    = os.environ.get("AWS_ACCESS_KEY_ID", "")
-AWS_SECRET_ACCESS_KEY = os.environ.get("AWS_SECRET_ACCESS_KEY", "")
 DB_PATH              = os.environ.get("DB_PATH", "/opt/backups/backup-manager.db")
 TIMEZONE             = os.environ.get("TIMEZONE", "UTC")
+# Restic/AWS/SSH config + the backup-restore engine now live in app/services/engine.py.
 
 DOWNLOAD_DIR = Path("/tmp/backup-downloads")
 DOWNLOAD_DIR.mkdir(exist_ok=True)
@@ -91,6 +85,10 @@ def init_db():
         "ALTER TABLE projects ADD COLUMN schedule_cron TEXT DEFAULT ''",
         "ALTER TABLE projects ADD COLUMN storage_type TEXT DEFAULT 's3'",
         "ALTER TABLE projects ADD COLUMN local_repo_path TEXT",
+        # BKP-1: file/directory backups + optional DB dump
+        "ALTER TABLE projects ADD COLUMN backup_paths TEXT DEFAULT '[]'",
+        "ALTER TABLE projects ADD COLUMN include_db INTEGER DEFAULT 1",
+        "ALTER TABLE projects ADD COLUMN backup_excludes TEXT DEFAULT ''",
     ]:
         try:
             conn.execute(migration)
@@ -116,9 +114,12 @@ def _backup_job(project_id: str):
     conn.close()
     if not row:
         return
-    project = dict(row)
-    success, output = run_app_backup(project)
-    append_log(get_log_file(project),
+    # Decode backup_paths/include_db here too: the scheduler builds the project
+    # dict directly from a raw row and does NOT go through get_project_or_404,
+    # so without this it would iterate the raw JSON string (review MUST-FIX #1).
+    project = _hydrate_project(row)
+    success, output = engine.run_app_backup(project)
+    engine.append_log(engine.get_log_file(project),
                f"INFO: Scheduled backup {'succeeded' if success else 'FAILED'}: {output[:200]}")
 
 
@@ -137,7 +138,7 @@ def _sync_schedule(project: dict):
                 replace_existing=True,
             )
         except Exception as e:
-            append_log(get_log_file(project), f"ERROR: Invalid cron expression '{cron}': {e}")
+            engine.append_log(engine.get_log_file(project), f"ERROR: Invalid cron expression '{cron}': {e}")
 
 
 def _load_all_schedules():
@@ -157,6 +158,11 @@ _load_all_schedules()
 # ---------------------------------------------------------------------------
 # Pydantic
 # ---------------------------------------------------------------------------
+
+class PathSpec(BaseModel):
+    source: str            # "volume" | "host"
+    value:  str
+
 
 class ProjectPayload(BaseModel):
     name:              str
@@ -183,6 +189,10 @@ class ProjectPayload(BaseModel):
     schedule_cron:     Optional[str] = ""
     storage_type:      str = "s3"
     local_repo_path:   Optional[str] = None
+    # BKP-1: file/directory sources, optional DB dump, restic excludes
+    backup_paths:      list[PathSpec] = []
+    include_db:        bool = True
+    backup_excludes:   Optional[str] = ""
 
 
 # ---------------------------------------------------------------------------
@@ -206,65 +216,29 @@ def generate_project_id(name: str) -> str:
     return f"{base}-{i}"
 
 
-def get_restic_env():
-    env = os.environ.copy()
-    env["RESTIC_REPOSITORY"]     = RESTIC_REPO
-    env["AWS_ACCESS_KEY_ID"]     = AWS_ACCESS_KEY_ID
-    env["AWS_SECRET_ACCESS_KEY"] = AWS_SECRET_ACCESS_KEY
-    # Prefer inline password env var; fall back to password file
-    restic_password = os.environ.get("RESTIC_PASSWORD", "")
-    if restic_password:
-        env["RESTIC_PASSWORD"] = restic_password
-        env.pop("RESTIC_PASSWORD_FILE", None)
-    else:
-        env["RESTIC_PASSWORD_FILE"] = RESTIC_PASSWORD_FILE
-    return env
+def _hydrate_project(row) -> dict:
+    """Turn a raw projects row into a dict with backup_paths/include_db decoded.
 
+    Input : a sqlite3.Row (or dict) straight from the projects table.
+    Output: a plain dict where ``backup_paths`` is a list[dict] (parsed JSON,
+            never a raw string) and ``include_db`` is coerced to bool.
 
-def get_project_restic_env(project: dict) -> dict:
-    env = os.environ.copy()
-    if project.get("storage_type") == "local":
-        repo = project.get("local_repo_path") or f"/opt/backups/restic/{project['restic_tag']}"
-        env["RESTIC_REPOSITORY"] = repo
-        env.pop("AWS_ACCESS_KEY_ID", None)
-        env.pop("AWS_SECRET_ACCESS_KEY", None)
-    else:
-        env["RESTIC_REPOSITORY"]     = RESTIC_REPO
-        env["AWS_ACCESS_KEY_ID"]     = AWS_ACCESS_KEY_ID
-        env["AWS_SECRET_ACCESS_KEY"] = AWS_SECRET_ACCESS_KEY
-    restic_password = os.environ.get("RESTIC_PASSWORD", "")
-    if restic_password:
-        env["RESTIC_PASSWORD"] = restic_password
-        env.pop("RESTIC_PASSWORD_FILE", None)
-    else:
-        env["RESTIC_PASSWORD_FILE"] = RESTIC_PASSWORD_FILE
-    return env
-
-
-def parse_connection_string(conn_str: str, engine: str) -> dict:
-    parsed = urllib.parse.urlparse(conn_str)
-    default_port = 5432 if engine == "postgres" else 3306
-    return {
-        "host":     parsed.hostname or "localhost",
-        "port":     parsed.port or default_port,
-        "user":     urllib.parse.unquote(parsed.username or ""),
-        "password": urllib.parse.unquote(parsed.password or ""),
-        "database": parsed.path.lstrip("/"),
-    }
-
-
-def get_log_file(project: dict) -> str:
-    return project.get("log_file") or f"/opt/backups/{project['restic_tag']}.log"
-
-
-def append_log(log_file: str, message: str):
-    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    try:
-        Path(log_file).parent.mkdir(parents=True, exist_ok=True)
-        with open(log_file, "a") as f:
-            f.write(f"[{ts}] {message}\n")
-    except Exception:
-        pass
+    Shared by every read path — both get_project_or_404 (HTTP routes) and
+    _backup_job (scheduler), so scheduled backups never iterate the raw
+    backup_paths JSON string character-by-character (review MUST-FIX #1).
+    """
+    project = dict(row)
+    raw_paths = project.get("backup_paths")
+    if isinstance(raw_paths, str):
+        try:
+            project["backup_paths"] = json.loads(raw_paths or "[]")
+        except (ValueError, TypeError):
+            project["backup_paths"] = []
+    elif raw_paths is None:
+        project["backup_paths"] = []
+    # SQLite stores include_db as 0/1; older rows may lack it entirely (DB-on).
+    project["include_db"] = bool(project.get("include_db", 1))
+    return project
 
 
 def get_project_or_404(project_id: str) -> dict:
@@ -273,7 +247,7 @@ def get_project_or_404(project_id: str) -> dict:
     conn.close()
     if not row:
         raise HTTPException(status_code=404, detail=f"Project '{project_id}' not found")
-    return dict(row)
+    return _hydrate_project(row)
 
 
 def verify_auth(credentials: HTTPBasicCredentials = Depends(security)):
@@ -286,296 +260,6 @@ def verify_auth(credentials: HTTPBasicCredentials = Depends(security)):
             headers={"WWW-Authenticate": "Basic"},
         )
     return credentials.username
-
-
-# ---------------------------------------------------------------------------
-# SSH Tunnel
-# ---------------------------------------------------------------------------
-
-def _find_free_port() -> int:
-    with socket.socket() as s:
-        s.bind(("", 0))
-        return s.getsockname()[1]
-
-
-def _wait_for_port(port: int, timeout: float = 10.0) -> bool:
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        try:
-            with socket.create_connection(("localhost", port), timeout=1):
-                return True
-        except (ConnectionRefusedError, OSError):
-            time.sleep(0.3)
-    return False
-
-
-@contextmanager
-def maybe_ssh_tunnel(project: dict, db_host: str, db_port: int):
-    """Open an SSH tunnel if ssh_host is configured, else yield original host/port."""
-    if not project.get("ssh_host"):
-        yield db_host, db_port
-        return
-
-    local_port = _find_free_port()
-    cmd = [
-        "ssh", "-N",
-        "-L", f"{local_port}:{db_host}:{db_port}",
-        "-o", "BatchMode=yes",
-        "-o", "StrictHostKeyChecking=no",
-        "-o", "ConnectTimeout=15",
-        "-o", "ServerAliveInterval=10",
-        "-o", "ExitOnForwardFailure=yes",
-        "-p", str(project.get("ssh_port") or 22),
-    ]
-    if project.get("ssh_key"):
-        cmd += ["-i", project["ssh_key"]]
-    cmd.append(f"{project['ssh_user']}@{project['ssh_host']}")
-
-    proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-    try:
-        if not _wait_for_port(local_port):
-            proc.kill()
-            stderr = proc.stderr.read().decode("utf-8", errors="replace").strip()
-            raise RuntimeError(f"SSH tunnel to {project['ssh_host']} failed: {stderr}")
-        yield "localhost", local_port
-    finally:
-        proc.kill()
-        proc.wait()
-
-
-# ---------------------------------------------------------------------------
-# Dump / Import
-# ---------------------------------------------------------------------------
-
-def _dump_db(project: dict, dump_file: Path) -> tuple[bool, str]:
-    engine = project["db_engine"]
-
-    if project["connection_type"] == "connection_string":
-        c = parse_connection_string(project["connection_string"], engine)
-        try:
-            with maybe_ssh_tunnel(project, c["host"], int(c["port"])) as (host, port):
-                env = os.environ.copy()
-                if engine == "postgres":
-                    env["PGPASSWORD"] = c["password"]
-                    cmd = ["pg_dump", "-h", host, "-p", str(port),
-                           "-U", c["user"], "-d", c["database"], "-f", str(dump_file)]
-                elif engine in ("mariadb", "mysql"):
-                    env["MYSQL_PWD"] = c["password"]
-                    cmd = ["mysqldump", "-h", host, f"-P{port}",
-                           "-u", c["user"], c["database"], f"--result-file={dump_file}"]
-                else:
-                    return False, f"Unsupported engine: {engine}"
-                r = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=300)
-                if r.returncode != 0:
-                    return False, r.stderr.strip()
-        except RuntimeError as e:
-            return False, str(e)
-
-    else:  # docker mode
-        container = project.get("docker_container", "")
-        user      = project.get("db_user", "")
-        password  = project.get("db_pass", "")
-        db        = project.get("db_name", "")
-
-        if engine == "postgres":
-            cmd = ["docker", "exec", "-e", f"PGPASSWORD={password}",
-                   container, "pg_dump", "-U", user, db]
-        elif engine in ("mariadb", "mysql"):
-            cmd = ["docker", "exec", container,
-                   "mysqldump", "-u", user, f"-p{password}", db]
-        else:
-            return False, f"Unsupported engine: {engine}"
-
-        r = subprocess.run(cmd, capture_output=True, timeout=300)
-        if r.returncode != 0:
-            return False, r.stderr.decode("utf-8", errors="replace").strip()
-        dump_file.write_bytes(r.stdout)
-
-    return True, ""
-
-
-def _import_db(project: dict, sql_file: Path) -> tuple[bool, str]:
-    engine = project["db_engine"]
-
-    if project["connection_type"] == "connection_string":
-        c = parse_connection_string(project["connection_string"], engine)
-        try:
-            with maybe_ssh_tunnel(project, c["host"], int(c["port"])) as (host, port):
-                env = os.environ.copy()
-                if engine == "postgres":
-                    env["PGPASSWORD"] = c["password"]
-                    cmd = ["psql", "-h", host, "-p", str(port),
-                           "-U", c["user"], "-d", c["database"], "-f", str(sql_file)]
-                    r = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=300)
-                elif engine in ("mariadb", "mysql"):
-                    env["MYSQL_PWD"] = c["password"]
-                    cmd = ["mysql", "-h", host, f"-P{port}", "-u", c["user"], c["database"]]
-                    with open(sql_file) as f:
-                        r = subprocess.run(cmd, stdin=f, env=env,
-                                           capture_output=True, text=True, timeout=300)
-                else:
-                    return False, f"Unsupported engine: {engine}"
-                if r.returncode != 0:
-                    return False, r.stderr.strip()
-        except RuntimeError as e:
-            return False, str(e)
-
-    else:  # docker mode
-        container = project.get("docker_container", "")
-        user      = project.get("db_user", "")
-        password  = project.get("db_pass", "")
-        db        = project.get("db_name", "")
-
-        if engine == "postgres":
-            cmd = ["docker", "exec", "-i", "-e", f"PGPASSWORD={password}",
-                   container, "psql", "-U", user, "-d", db]
-        elif engine in ("mariadb", "mysql"):
-            cmd = ["docker", "exec", "-i", container,
-                   "mariadb", "-u", user, f"-p{password}", db]
-        else:
-            return False, f"Unsupported engine: {engine}"
-
-        with open(sql_file) as f:
-            r = subprocess.run(cmd, stdin=f, capture_output=True, text=True, timeout=300)
-        if r.returncode != 0:
-            return False, r.stderr.strip()
-
-    return True, ""
-
-
-# ---------------------------------------------------------------------------
-# Backup / Restore
-# ---------------------------------------------------------------------------
-
-def run_app_backup(project: dict) -> tuple[bool, str]:
-    log_file = get_log_file(project)
-    tag      = project["restic_tag"]
-    ts       = datetime.now().strftime("%Y%m%d-%H%M%S")
-    tmp_dir  = Path(tempfile.mkdtemp(prefix="backup-"))
-    lines    = []
-
-    try:
-        append_log(log_file, f"INFO: Starting backup for {project['name']}")
-        dump_file = tmp_dir / f"{tag}-{ts}.sql"
-
-        ok, err = _dump_db(project, dump_file)
-        if not ok:
-            append_log(log_file, f"ERROR: DB dump failed: {err}")
-            return False, f"DB dump failed: {err}"
-
-        size = dump_file.stat().st_size
-        lines.append(f"DB dump complete ({size:,} bytes)")
-        append_log(log_file, "INFO: DB dump complete")
-
-        backup_paths = [str(dump_file)]
-        if project["project_type"] == "wordpress" and project.get("wp_resource_id"):
-            uploads = Path(f"/var/lib/docker/volumes/{project['wp_resource_id']}_wp-uploads/_data")
-            if uploads.exists():
-                backup_paths.append(str(uploads))
-                lines.append(f"Including WordPress uploads")
-
-        restic_env = get_project_restic_env(project)
-
-        # Auto-init local repo on first use
-        if project.get("storage_type") == "local":
-            repo_path = Path(project.get("local_repo_path") or f"/opt/backups/restic/{project['restic_tag']}")
-            if not (repo_path / "config").exists():
-                repo_path.mkdir(parents=True, exist_ok=True)
-                r_init = subprocess.run(
-                    ["restic", "init"], env=restic_env,
-                    capture_output=True, text=True, timeout=30,
-                )
-                if r_init.returncode != 0:
-                    append_log(log_file, f"ERROR: Failed to init local repo: {r_init.stderr.strip()}")
-                    return False, f"Failed to init local repo: {r_init.stderr.strip()}"
-                append_log(log_file, "INFO: Local restic repo initialised")
-
-        r = subprocess.run(
-            ["restic", "backup"] + backup_paths + ["--tag", tag],
-            env=restic_env, capture_output=True, text=True, timeout=600,
-        )
-        if r.returncode != 0:
-            append_log(log_file, f"ERROR: Restic backup failed: {r.stderr.strip()}")
-            return False, f"Restic backup failed: {r.stderr.strip()}"
-
-        lines.append("Restic backup complete.")
-        append_log(log_file, "INFO: Restic backup complete")
-
-        r = subprocess.run(
-            ["restic", "forget", "--tag", tag,
-             "--keep-daily",   str(project.get("keep_daily",   7)),
-             "--keep-weekly",  str(project.get("keep_weekly",  4)),
-             "--keep-monthly", str(project.get("keep_monthly", 6)),
-             "--keep-yearly",  str(project.get("keep_yearly",  1)),
-             "--prune"],
-            env=restic_env, capture_output=True, text=True, timeout=300,
-        )
-        if r.returncode == 0:
-            lines.append("Retention policy applied.")
-            append_log(log_file, "INFO: Retention policy applied")
-        else:
-            lines.append(f"Warning: retention failed: {r.stderr.strip()}")
-
-        return True, "\n".join(lines)
-
-    except subprocess.TimeoutExpired:
-        append_log(log_file, "ERROR: Backup timed out")
-        return False, "Backup timed out"
-    except Exception as e:
-        append_log(log_file, f"ERROR: {e}")
-        return False, str(e)
-    finally:
-        shutil.rmtree(tmp_dir, ignore_errors=True)
-
-
-def run_restore(project: dict, snapshot_id: str) -> tuple[bool, str]:
-    log_file    = get_log_file(project)
-    restore_dir = Path(tempfile.mkdtemp(prefix="restore-"))
-    lines       = []
-
-    try:
-        r = subprocess.run(
-            ["restic", "restore", snapshot_id, "--target", str(restore_dir)],
-            env=get_project_restic_env(project), capture_output=True, text=True, timeout=600,
-        )
-        if r.returncode != 0:
-            return False, f"Restic restore failed: {r.stderr}"
-
-        sql_files = list(restore_dir.rglob("*.sql"))
-        if not sql_files:
-            return False, "No SQL dump found in snapshot."
-
-        ok, err = _import_db(project, sql_files[0])
-        if not ok:
-            lines.append(f"DB restore error: {err}")
-        else:
-            lines.append("Database restored successfully.")
-            append_log(log_file, f"INFO: Restored snapshot {snapshot_id}")
-
-        if project["project_type"] == "wordpress" and project.get("wp_resource_id"):
-            uploads_target  = Path(f"/var/lib/docker/volumes/{project['wp_resource_id']}_wp-uploads/_data")
-            restored_uploads = list(restore_dir.rglob("_data"))
-            if restored_uploads:
-                r = subprocess.run(
-                    ["rsync", "-a", "--delete",
-                     f"{restored_uploads[0]}/", f"{uploads_target}/"],
-                    capture_output=True, text=True, timeout=300,
-                )
-                lines.append(
-                    "WordPress uploads restored." if r.returncode == 0
-                    else f"Uploads restore error: {r.stderr}"
-                )
-            else:
-                lines.append("No uploads directory found in snapshot.")
-
-        return True, "\n".join(lines)
-
-    except subprocess.TimeoutExpired:
-        return False, "Restore timed out"
-    except Exception as e:
-        return False, str(e)
-    finally:
-        shutil.rmtree(restore_dir, ignore_errors=True)
 
 
 # ---------------------------------------------------------------------------
@@ -618,6 +302,13 @@ def list_projects(user: str = Depends(verify_auth)):
 
 @app.post("/api/projects", status_code=201)
 def create_project(body: ProjectPayload, user: str = Depends(verify_auth)):
+    # Server-side, save-time validation of backup paths (AC5, MUST-FIX #2).
+    path_specs = [p.dict() for p in body.backup_paths]
+    try:
+        backup_paths.validate(path_specs)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
     project_id = generate_project_id(body.name)
     conn = get_db()
     conn.execute(
@@ -627,14 +318,15 @@ def create_project(body: ProjectPayload, user: str = Depends(verify_auth)):
             ssh_host,ssh_port,ssh_user,ssh_key,
             keep_daily,keep_weekly,keep_monthly,keep_yearly,
             restic_tag,backup_script,log_file,wp_resource_id,schedule_cron,
-            storage_type,local_repo_path)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            storage_type,local_repo_path,backup_paths,include_db,backup_excludes)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (project_id, body.name, body.db_engine, body.project_type, body.connection_type,
          body.connection_string, body.docker_container, body.db_user, body.db_pass, body.db_name,
          body.ssh_host, body.ssh_port, body.ssh_user, body.ssh_key,
          body.keep_daily, body.keep_weekly, body.keep_monthly, body.keep_yearly,
          body.restic_tag, body.backup_script, body.log_file, body.wp_resource_id,
-         body.schedule_cron or "", body.storage_type, body.local_repo_path),
+         body.schedule_cron or "", body.storage_type, body.local_repo_path,
+         json.dumps(path_specs), int(body.include_db), body.backup_excludes or ""),
     )
     conn.commit()
     conn.close()
@@ -651,6 +343,13 @@ def get_project_detail(project_id: str, user: str = Depends(verify_auth)):
 @app.put("/api/projects/{project_id}")
 def update_project(project_id: str, body: ProjectPayload, user: str = Depends(verify_auth)):
     existing = get_project_or_404(project_id)
+    # Server-side, save-time validation of backup paths (AC5, MUST-FIX #2).
+    path_specs = [p.dict() for p in body.backup_paths]
+    try:
+        backup_paths.validate(path_specs)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
     # Keep existing password when not provided (edit form leaves it blank)
     db_pass = body.db_pass if body.db_pass else existing.get("db_pass")
     conn = get_db()
@@ -661,14 +360,16 @@ def update_project(project_id: str, body: ProjectPayload, user: str = Depends(ve
            ssh_host=?,ssh_port=?,ssh_user=?,ssh_key=?,
            keep_daily=?,keep_weekly=?,keep_monthly=?,keep_yearly=?,
            restic_tag=?,backup_script=?,log_file=?,wp_resource_id=?,schedule_cron=?,
-           storage_type=?,local_repo_path=?
+           storage_type=?,local_repo_path=?,backup_paths=?,include_db=?,backup_excludes=?
            WHERE id=?""",
         (body.name, body.db_engine, body.project_type, body.connection_type, body.connection_string,
          body.docker_container, body.db_user, db_pass, body.db_name,
          body.ssh_host, body.ssh_port, body.ssh_user, body.ssh_key,
          body.keep_daily, body.keep_weekly, body.keep_monthly, body.keep_yearly,
          body.restic_tag, body.backup_script, body.log_file, body.wp_resource_id,
-         body.schedule_cron or "", body.storage_type, body.local_repo_path, project_id),
+         body.schedule_cron or "", body.storage_type, body.local_repo_path,
+         json.dumps(path_specs), int(body.include_db), body.backup_excludes or "",
+         project_id),
     )
     conn.commit()
     conn.close()
@@ -700,7 +401,7 @@ def list_snapshots(project_id: str, user: str = Depends(verify_auth)):
     try:
         r = subprocess.run(
             ["restic", "snapshots", "--json", "--tag", project["restic_tag"]],
-            env=get_project_restic_env(project), capture_output=True, text=True, timeout=30,
+            env=engine.get_project_restic_env(project), capture_output=True, text=True, timeout=30,
         )
         if r.returncode != 0:
             return JSONResponse({"error": r.stderr.strip()}, status_code=500)
@@ -729,7 +430,7 @@ def trigger_backup(project_id: str, user: str = Depends(verify_auth)):
                 capture_output=True, text=True, timeout=300,
             )
             return {"success": r.returncode == 0, "output": r.stdout + r.stderr}
-        success, output = run_app_backup(project)
+        success, output = engine.run_app_backup(project)
         return {"success": success, "output": output}
     except subprocess.TimeoutExpired:
         return JSONResponse({"error": "Backup timed out (5 min limit)"}, status_code=504)
@@ -751,7 +452,7 @@ def prepare_download(project_id: str, snapshot_id: str, user: str = Depends(veri
     try:
         r = subprocess.run(
             ["restic", "restore", snapshot_id, "--target", str(restore_dir)],
-            env=get_project_restic_env(project), capture_output=True, text=True, timeout=600,
+            env=engine.get_project_restic_env(project), capture_output=True, text=True, timeout=600,
         )
         if r.returncode != 0:
             return JSONResponse({"error": r.stderr.strip()}, status_code=500)
@@ -781,10 +482,24 @@ def download_snapshot(project_id: str, snapshot_id: str, user: str = Depends(ver
     )
 
 
+class RestorePayload(BaseModel):
+    scope: str = "all"   # "all" | "db" | "files"
+
+
 @app.post("/api/projects/{project_id}/snapshots/{snapshot_id}/restore")
-def restore_snapshot(project_id: str, snapshot_id: str, user: str = Depends(verify_auth)):
+def restore_snapshot(
+    project_id: str,
+    snapshot_id: str,
+    body: Optional[RestorePayload] = None,
+    scope: Optional[str] = Query(default=None),
+    user: str = Depends(verify_auth),
+):
     project = get_project_or_404(project_id)
-    success, output = run_restore(project, snapshot_id)
+    # Scope may arrive as a query param or in the JSON body; default to "all".
+    chosen = scope or (body.scope if body else None) or "all"
+    if chosen not in ("all", "db", "files"):
+        raise HTTPException(status_code=400, detail=f"Invalid restore scope: {chosen}")
+    success, output = engine.run_restore(project, snapshot_id, scope=chosen)
     if success:
         return {"success": True, "output": output}
     return JSONResponse({"error": output}, status_code=500)
@@ -798,7 +513,7 @@ def get_logs(
 ):
     project = get_project_or_404(project_id)
     try:
-        log_path = Path(get_log_file(project))
+        log_path = Path(engine.get_log_file(project))
         if not log_path.exists():
             return {"logs": "No log file found."}
         log_lines = log_path.read_text().strip().split("\n")
