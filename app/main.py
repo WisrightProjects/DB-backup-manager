@@ -20,11 +20,18 @@ from apscheduler.triggers.cron import CronTrigger
 from fastapi import FastAPI, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from fastapi.staticfiles import StaticFiles
 from starlette.status import HTTP_401_UNAUTHORIZED
 from pydantic import BaseModel
 
 app = FastAPI(title="Backup Manager")
 security = HTTPBasic()
+
+# Serve the dashboard's CSS/JS. Unauthenticated by design (no secrets in assets);
+# the API and the dashboard page itself stay behind basic auth.
+STATIC_DIR = Path(__file__).parent / "static"
+STATIC_DIR.mkdir(exist_ok=True)
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 RESTIC_REPO          = os.environ.get("RESTIC_REPO", "")
 RESTIC_PASSWORD_FILE = os.environ.get("RESTIC_PASSWORD_FILE", "/opt/backups/.restic-pass")
@@ -578,7 +585,7 @@ def run_restore(project: dict, snapshot_id: str) -> tuple[bool, str]:
 @app.get("/", response_class=HTMLResponse)
 def dashboard(user: str = Depends(verify_auth)):
     html_path = Path(__file__).parent / "templates" / "index.html"
-    return HTMLResponse(content=html_path.read_text())
+    return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
 
 
 # ---------------------------------------------------------------------------
@@ -604,6 +611,7 @@ def list_projects(user: str = Depends(verify_auth)):
             "ssh":             bool(r["ssh_host"]),
             "schedule_cron":   r["schedule_cron"] or "",
             "next_run":        next_run,
+            "storage_type":    r["storage_type"],
         })
     return {"projects": projects}
 
