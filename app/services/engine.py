@@ -191,8 +191,10 @@ def _dump_db(project: dict, dump_file: Path) -> tuple[bool, str]:
             cmd = ["docker", "exec", "-e", f"PGPASSWORD={password}",
                    container, "pg_dump", "-U", user, db]
         elif engine in ("mariadb", "mysql"):
+            # MariaDB images ship mariadb-dump; the mysqldump symlink was dropped.
+            dump_bin = "mariadb-dump" if engine == "mariadb" else "mysqldump"
             cmd = ["docker", "exec", container,
-                   "mysqldump", "-u", user, f"-p{password}", db]
+                   dump_bin, "-u", user, f"-p{password}", db]
         else:
             return False, f"Unsupported engine: {engine}"
 
@@ -240,8 +242,10 @@ def _import_db(project: dict, sql_file: Path) -> tuple[bool, str]:
             cmd = ["docker", "exec", "-i", "-e", f"PGPASSWORD={password}",
                    container, "psql", "-U", user, "-d", db]
         elif engine in ("mariadb", "mysql"):
+            # MariaDB images ship the `mariadb` client; MySQL images ship `mysql`.
+            cli_bin = "mariadb" if engine == "mariadb" else "mysql"
             cmd = ["docker", "exec", "-i", container,
-                   "mariadb", "-u", user, f"-p{password}", db]
+                   cli_bin, "-u", user, f"-p{password}", db]
         else:
             return False, f"Unsupported engine: {engine}"
 
