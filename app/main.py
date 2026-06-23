@@ -19,7 +19,7 @@ from starlette.status import HTTP_401_UNAUTHORIZED
 from pydantic import BaseModel
 
 from app import backup_paths
-from app.services import engine
+from app.services import engine, notify
 
 app = FastAPI(title="Backup Manager")
 security = HTTPBasic()
@@ -89,6 +89,8 @@ def init_db():
         "ALTER TABLE projects ADD COLUMN backup_paths TEXT DEFAULT '[]'",
         "ALTER TABLE projects ADD COLUMN include_db INTEGER DEFAULT 1",
         "ALTER TABLE projects ADD COLUMN backup_excludes TEXT DEFAULT ''",
+        # Per-project email recipients for backup success/failure notifications
+        "ALTER TABLE projects ADD COLUMN notify_email TEXT DEFAULT ''",
     ]:
         try:
             conn.execute(migration)
@@ -121,6 +123,7 @@ def _backup_job(project_id: str):
     success, output = engine.run_app_backup(project)
     engine.append_log(engine.get_log_file(project),
                f"INFO: Scheduled backup {'succeeded' if success else 'FAILED'}: {output[:200]}")
+    notify.send_backup_result(project, success, output)
 
 
 def _sync_schedule(project: dict):
@@ -193,6 +196,8 @@ class ProjectPayload(BaseModel):
     backup_paths:      list[PathSpec] = []
     include_db:        bool = True
     backup_excludes:   Optional[str] = ""
+    # Comma-separated recipients for success/failure emails (per-project)
+    notify_email:      Optional[str] = ""
 
 
 # ---------------------------------------------------------------------------
@@ -318,15 +323,16 @@ def create_project(body: ProjectPayload, user: str = Depends(verify_auth)):
             ssh_host,ssh_port,ssh_user,ssh_key,
             keep_daily,keep_weekly,keep_monthly,keep_yearly,
             restic_tag,backup_script,log_file,wp_resource_id,schedule_cron,
-            storage_type,local_repo_path,backup_paths,include_db,backup_excludes)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            storage_type,local_repo_path,backup_paths,include_db,backup_excludes,notify_email)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (project_id, body.name, body.db_engine, body.project_type, body.connection_type,
          body.connection_string, body.docker_container, body.db_user, body.db_pass, body.db_name,
          body.ssh_host, body.ssh_port, body.ssh_user, body.ssh_key,
          body.keep_daily, body.keep_weekly, body.keep_monthly, body.keep_yearly,
          body.restic_tag, body.backup_script, body.log_file, body.wp_resource_id,
          body.schedule_cron or "", body.storage_type, body.local_repo_path,
-         json.dumps(path_specs), int(body.include_db), body.backup_excludes or ""),
+         json.dumps(path_specs), int(body.include_db), body.backup_excludes or "",
+         body.notify_email or ""),
     )
     conn.commit()
     conn.close()
@@ -360,7 +366,8 @@ def update_project(project_id: str, body: ProjectPayload, user: str = Depends(ve
            ssh_host=?,ssh_port=?,ssh_user=?,ssh_key=?,
            keep_daily=?,keep_weekly=?,keep_monthly=?,keep_yearly=?,
            restic_tag=?,backup_script=?,log_file=?,wp_resource_id=?,schedule_cron=?,
-           storage_type=?,local_repo_path=?,backup_paths=?,include_db=?,backup_excludes=?
+           storage_type=?,local_repo_path=?,backup_paths=?,include_db=?,backup_excludes=?,
+           notify_email=?
            WHERE id=?""",
         (body.name, body.db_engine, body.project_type, body.connection_type, body.connection_string,
          body.docker_container, body.db_user, db_pass, body.db_name,
@@ -369,6 +376,7 @@ def update_project(project_id: str, body: ProjectPayload, user: str = Depends(ve
          body.restic_tag, body.backup_script, body.log_file, body.wp_resource_id,
          body.schedule_cron or "", body.storage_type, body.local_repo_path,
          json.dumps(path_specs), int(body.include_db), body.backup_excludes or "",
+         body.notify_email or "",
          project_id),
     )
     conn.commit()
@@ -429,10 +437,13 @@ def trigger_backup(project_id: str, user: str = Depends(verify_auth)):
                 ["bash", project["backup_script"]],
                 capture_output=True, text=True, timeout=300,
             )
-            return {"success": r.returncode == 0, "output": r.stdout + r.stderr}
-        success, output = engine.run_app_backup(project)
+            success, output = r.returncode == 0, r.stdout + r.stderr
+        else:
+            success, output = engine.run_app_backup(project)
+        notify.send_backup_result(project, success, output)
         return {"success": success, "output": output}
     except subprocess.TimeoutExpired:
+        notify.send_backup_result(project, False, "Backup timed out (5 min limit)")
         return JSONResponse({"error": "Backup timed out (5 min limit)"}, status_code=504)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)

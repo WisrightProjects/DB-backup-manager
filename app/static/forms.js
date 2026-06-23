@@ -185,6 +185,12 @@ function formHTML(e) {
       </div>
     </div>
 
+    <div class="fsection"><div class="fsection-t">Notifications <span style="text-transform:none;color:var(--text-dim);font-weight:400;">(optional)</span></div>
+      <div class="fgroup full"><label class="flabel">Email recipients</label>
+        <input id="f_notify" class="finput mono" value="${esc(e.notify_email||'')}" placeholder="you@wisright.com, ops@wisright.com">
+        <span class="fhint">Comma-separated. Emailed on every backup success &amp; failure (scheduled and manual). Needs SMTP env vars set on the server.</span></div>
+    </div>
+
     <div class="fsection"><div class="fsection-t">Advanced</div>
       <div class="fgrid">
         <div class="fgroup full"><label class="flabel">Restic tag</label><input id="f_tag" class="finput mono" value="${esc(e.restic_tag||'')}" placeholder="my-db"><span class="fhint">Auto-filled from name. Filters snapshots in restic.</span></div>
@@ -286,6 +292,7 @@ async function saveProjectForm() {
     backup_paths: backupPaths,
     include_db: includeDb,
     backup_excludes: byId('f_excludes').value.trim(),
+    notify_email: byId('f_notify').value.trim(),
   };
 
   if (!body.name) return toast('Name is required', 'err');

@@ -28,6 +28,15 @@ services:
       - PG_PASS=${PG_PASS}
       - PG_DB=postgres
       - HOST_BACKUP_ROOT=${HOST_BACKUP_ROOT:-/srv}
+      # Email notifications on backup success/failure (leave SMTP_HOST empty to disable)
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - SMTP_FROM=${SMTP_FROM:-}
+      - SMTP_SECURITY=${SMTP_SECURITY:-starttls}   # starttls | ssl | none
+      - NOTIFY_ON=${NOTIFY_ON:-all}                # all | failure | success
+      - NOTIFY_EMAIL=${NOTIFY_EMAIL:-}             # global fallback recipients
     volumes:
       - /opt/backups:/opt/backups:rw
       - /var/run/docker.sock:/var/run/docker.sock
