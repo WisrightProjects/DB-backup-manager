@@ -363,7 +363,7 @@ def run_app_backup(project: dict) -> tuple[bool, str]:
         append_log(log_file, "INFO: Restic backup complete")
 
         r = subprocess.run(
-            ["restic", "forget", "--tag", tag,
+            ["restic", "forget", "--tag", tag, "--group-by", "tag",
              "--keep-daily",   str(project.get("keep_daily",   7)),
              "--keep-weekly",  str(project.get("keep_weekly",  4)),
              "--keep-monthly", str(project.get("keep_monthly", 6)),
