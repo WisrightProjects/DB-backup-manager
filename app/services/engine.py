@@ -66,6 +66,22 @@ def get_restic_env():
     return env
 
 
+def project_s3_repo(project: dict) -> str:
+    """S3 repo path for one project: ``<RESTIC_REPO>/<restic_tag>``.
+
+    Each project gets its own sub-repo so the bucket is browsable by project
+    name instead of one opaque pile. Deduplication still applies within a
+    project; unrelated projects share little anyway.
+
+    Falls back to the bare RESTIC_REPO when a project has no tag, which keeps
+    older single-repo setups working.
+    """
+    tag = (project.get("restic_tag") or "").strip().strip("/")
+    if not tag:
+        return RESTIC_REPO
+    return f"{RESTIC_REPO.rstrip('/')}/{tag}"
+
+
 def get_project_restic_env(project: dict) -> dict:
     env = os.environ.copy()
     if project.get("storage_type") == "local":
@@ -74,7 +90,7 @@ def get_project_restic_env(project: dict) -> dict:
         env.pop("AWS_ACCESS_KEY_ID", None)
         env.pop("AWS_SECRET_ACCESS_KEY", None)
     else:
-        env["RESTIC_REPOSITORY"]     = RESTIC_REPO
+        env["RESTIC_REPOSITORY"]     = project_s3_repo(project)
         env["AWS_ACCESS_KEY_ID"]     = AWS_ACCESS_KEY_ID
         env["AWS_SECRET_ACCESS_KEY"] = AWS_SECRET_ACCESS_KEY
     restic_password = os.environ.get("RESTIC_PASSWORD", "")
@@ -332,7 +348,7 @@ def run_app_backup(project: dict) -> tuple[bool, str]:
 
         restic_env = get_project_restic_env(project)
 
-        # Auto-init local repo on first use
+        # Auto-init the project's repo on first use (local dir or S3 sub-path)
         if project.get("storage_type") == "local":
             repo_path = Path(project.get("local_repo_path") or f"/opt/backups/restic/{project['restic_tag']}")
             if not (repo_path / "config").exists():
@@ -345,6 +361,22 @@ def run_app_backup(project: dict) -> tuple[bool, str]:
                     append_log(log_file, f"ERROR: Failed to init local repo: {r_init.stderr.strip()}")
                     return False, f"Failed to init local repo: {r_init.stderr.strip()}"
                 append_log(log_file, "INFO: Local restic repo initialised")
+        else:
+            # S3 has no cheap existence check, so probe the repo and init if the
+            # project's sub-repo is not there yet.
+            probe = subprocess.run(
+                ["restic", "cat", "config"], env=restic_env,
+                capture_output=True, text=True, timeout=60,
+            )
+            if probe.returncode != 0:
+                r_init = subprocess.run(
+                    ["restic", "init"], env=restic_env,
+                    capture_output=True, text=True, timeout=60,
+                )
+                if r_init.returncode != 0:
+                    append_log(log_file, f"ERROR: Failed to init S3 repo: {r_init.stderr.strip()}")
+                    return False, f"Failed to init S3 repo: {r_init.stderr.strip()}"
+                append_log(log_file, f"INFO: S3 restic repo initialised at {restic_env['RESTIC_REPOSITORY']}")
 
         # Build --exclude flags from the comma-separated excludes field (AC10).
         excludes = [e.strip() for e in (project.get("backup_excludes") or "").split(",") if e.strip()]
