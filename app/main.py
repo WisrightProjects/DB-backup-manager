@@ -408,8 +408,11 @@ def list_snapshots(project_id: str, user: str = Depends(verify_auth)):
     project = get_project_or_404(project_id)
     try:
         r = subprocess.run(
-            ["restic", "snapshots", "--json", "--tag", project["restic_tag"]],
-            env=engine.get_project_restic_env(project), capture_output=True, text=True, timeout=30,
+            # --no-lock: listing is read-only, so it must not queue behind (or
+            # leave stale locks for) a running backup.
+            ["restic", "snapshots", "--json", "--no-lock", "--tag", project["restic_tag"]],
+            env=engine.get_project_restic_env(project), capture_output=True, text=True,
+            timeout=int(os.environ.get("SNAPSHOT_LIST_TIMEOUT", 120)),
         )
         if r.returncode != 0:
             return JSONResponse({"error": r.stderr.strip()}, status_code=500)

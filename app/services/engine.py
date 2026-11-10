@@ -25,6 +25,7 @@ from app import backup_paths
 
 RESTIC_REPO           = os.environ.get("RESTIC_REPO", "")
 RESTIC_PASSWORD_FILE  = os.environ.get("RESTIC_PASSWORD_FILE", "/opt/backups/.restic-pass")
+S3_PROBE_TIMEOUT      = int(os.environ.get("S3_PROBE_TIMEOUT", 300))
 AWS_ACCESS_KEY_ID     = os.environ.get("AWS_ACCESS_KEY_ID", "")
 AWS_SECRET_ACCESS_KEY = os.environ.get("AWS_SECRET_ACCESS_KEY", "")
 
@@ -364,14 +365,16 @@ def run_app_backup(project: dict) -> tuple[bool, str]:
         else:
             # S3 has no cheap existence check, so probe the repo and init if the
             # project's sub-repo is not there yet.
+            # Contabo S3 can take well over a minute to answer at busy times;
+            # a 60 s probe limit used to fail whole backups as "timed out".
             probe = subprocess.run(
-                ["restic", "cat", "config"], env=restic_env,
-                capture_output=True, text=True, timeout=60,
+                ["restic", "cat", "config", "--no-lock"], env=restic_env,
+                capture_output=True, text=True, timeout=S3_PROBE_TIMEOUT,
             )
             if probe.returncode != 0:
                 r_init = subprocess.run(
                     ["restic", "init"], env=restic_env,
-                    capture_output=True, text=True, timeout=60,
+                    capture_output=True, text=True, timeout=S3_PROBE_TIMEOUT,
                 )
                 if r_init.returncode != 0:
                     append_log(log_file, f"ERROR: Failed to init S3 repo: {r_init.stderr.strip()}")
@@ -381,6 +384,12 @@ def run_app_backup(project: dict) -> tuple[bool, str]:
         # Build --exclude flags from the comma-separated excludes field (AC10).
         excludes = [e.strip() for e in (project.get("backup_excludes") or "").split(",") if e.strip()]
         exclude_flags = sum([["--exclude", e] for e in excludes], [])
+
+        # Clear stale locks left by killed runs. Plain `unlock` only removes
+        # locks restic judges stale, so it never breaks a live operation; left
+        # in place they block `forget --prune` and retention silently stops.
+        subprocess.run(["restic", "unlock"], env=restic_env,
+                       capture_output=True, text=True, timeout=S3_PROBE_TIMEOUT)
 
         r = subprocess.run(
             ["restic", "backup"] + sources + exclude_flags + ["--tag", tag],
@@ -401,7 +410,7 @@ def run_app_backup(project: dict) -> tuple[bool, str]:
              "--keep-monthly", str(project.get("keep_monthly", 6)),
              "--keep-yearly",  str(project.get("keep_yearly",  1)),
              "--prune"],
-            env=restic_env, capture_output=True, text=True, timeout=300,
+            env=restic_env, capture_output=True, text=True, timeout=900,
         )
         if r.returncode == 0:
             lines.append("Retention policy applied.")

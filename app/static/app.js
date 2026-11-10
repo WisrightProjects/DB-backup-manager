@@ -52,8 +52,18 @@ async function loadProjects() {
   loadAllStatuses();
 }
 
+// Load at most 3 projects at a time: firing every snapshot request at once
+// overloads the S3 backend and most of them time out (504).
+async function mapLimit(items, limit, fn) {
+  let i = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (i < items.length) { const it = items[i++]; try { await fn(it); } catch (_) {} }
+  });
+  await Promise.all(workers);
+}
+
 async function loadAllStatuses() {
-  await Promise.allSettled(projects.map(async p => {
+  await mapLimit(projects, 3, async p => {
     const d = await api(`/api/projects/${p.id}/snapshots`);
     if (d && d.snapshots && d.snapshots.length) {
       const last = new Date(d.snapshots[0].time).getTime();
@@ -61,7 +71,9 @@ async function loadAllStatuses() {
     } else {
       statuses[p.id] = { count:0, lastMs:null, status:'idle' };
     }
-  }));
+    renderSidebar();
+    if (view === 'fleet') renderFleet();
+  });
   renderSidebar();
   if (view === 'fleet') renderFleet();
 }
